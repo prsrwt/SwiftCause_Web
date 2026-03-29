@@ -30,7 +30,8 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     } else {
-                        // Sample campaigns data
+                        // Sample campaigns data for testing/development
+                        // TODO: Replace with real API data from CampaignRepository
                         val sampleCampaigns = listOf(
                             Campaign(
                                 id = "1",

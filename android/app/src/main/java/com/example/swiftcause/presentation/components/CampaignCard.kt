@@ -1,6 +1,5 @@
 package com.example.swiftcause.presentation.components
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -9,7 +8,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,14 +16,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.swiftcause.R
 import com.example.swiftcause.domain.models.Campaign
 import com.example.swiftcause.ui.theme.*
+import com.example.swiftcause.utils.CurrencyFormatter
 
 @Composable
 fun CampaignCard(
@@ -63,8 +66,14 @@ fun CampaignCard(
                     .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
             ) {
                 AsyncImage(
-                    model = campaign.coverImageUrl,
-                    contentDescription = campaign.title,
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(campaign.coverImageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = stringResource(
+                        R.string.content_description_campaign_image,
+                        campaign.title
+                    ),
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                     placeholder = painterResource(android.R.drawable.ic_menu_gallery),
@@ -102,13 +111,22 @@ fun CampaignCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = formatCurrency(campaign.raised, campaign.currency),
+                            text = CurrencyFormatter.formatCurrency(
+                                campaign.raised,
+                                campaign.currency
+                            ),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             color = TextPrimary
                         )
                         Text(
-                            text = "Goal ${formatCurrencyFromMajor(campaign.goal, campaign.currency)}",
+                            text = stringResource(
+                                R.string.goal_amount,
+                                CurrencyFormatter.formatCurrencyFromMajor(
+                                    campaign.goal,
+                                    campaign.currency
+                                )
+                            ),
                             fontSize = 12.sp,
                             color = TextMuted
                         )
@@ -143,6 +161,10 @@ fun CampaignCard(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         top3Amounts.forEach { amount ->
+                            val formattedAmount = CurrencyFormatter.formatCurrencyFromMajor(
+                                amount,
+                                campaign.currency
+                            )
                             OutlinedButton(
                                 onClick = { onAmountClick(amount) },
                                 modifier = Modifier
@@ -159,7 +181,7 @@ fun CampaignCard(
                                 )
                             ) {
                                 Text(
-                                    text = formatCurrencyFromMajor(amount, campaign.currency),
+                                    text = formattedAmount,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
@@ -183,7 +205,7 @@ fun CampaignCard(
                         )
                     ) {
                         Text(
-                            text = "Donate",
+                            text = stringResource(R.string.donate),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -191,25 +213,5 @@ fun CampaignCard(
                 }
             }
         }
-    }
-}
-
-// Currency formatting utilities
-private fun formatCurrency(amount: Long, currency: String): String {
-    val amountInMajor = amount / 100.0
-    return when (currency) {
-        "USD" -> "$${amountInMajor.toInt()}"
-        "EUR" -> "€${amountInMajor.toInt()}"
-        "GBP" -> "£${amountInMajor.toInt()}"
-        else -> "$currency ${amountInMajor.toInt()}"
-    }
-}
-
-private fun formatCurrencyFromMajor(amount: Long, currency: String): String {
-    return when (currency) {
-        "USD" -> "$$amount"
-        "EUR" -> "€$amount"
-        "GBP" -> "£$amount"
-        else -> "$currency $amount"
     }
 }
