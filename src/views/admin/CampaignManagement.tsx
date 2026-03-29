@@ -1639,7 +1639,7 @@ const CampaignManagement = ({
       }
       
       // Upload gallery images if any were selected
-      let galleryImageUrls = [...newCampaignFormData.galleryImages];
+      const galleryImageUrls = [...newCampaignFormData.galleryImages];
       if (selectedNewCampaignGalleryFiles.length > 0) {
         for (const file of selectedNewCampaignGalleryFiles) {
           const uploadedUrl = await uploadFile(
@@ -1788,7 +1788,7 @@ const CampaignManagement = ({
       }
       
       // Upload gallery images if any were selected
-      let galleryImageUrls = [...newCampaignFormData.galleryImages];
+      const galleryImageUrls = [...newCampaignFormData.galleryImages];
       if (selectedNewCampaignGalleryFiles.length > 0) {
         for (const file of selectedNewCampaignGalleryFiles) {
           const uploadedUrl = await uploadFile(
@@ -1899,7 +1899,7 @@ const CampaignManagement = ({
       }
       
       // Upload gallery images if any were selected
-      let galleryImageUrls = [...editCampaignFormData.galleryImages];
+      const galleryImageUrls = [...editCampaignFormData.galleryImages];
       if (selectedEditCampaignGalleryFiles.length > 0) {
         for (const file of selectedEditCampaignGalleryFiles) {
           const uploadedUrl = await uploadFile(
@@ -2029,7 +2029,7 @@ const CampaignManagement = ({
       }
       
       // Upload gallery images if any were selected
-      let galleryImageUrls = [...editCampaignFormData.galleryImages];
+      const galleryImageUrls = [...editCampaignFormData.galleryImages];
       if (selectedEditCampaignGalleryFiles.length > 0) {
         for (const file of selectedEditCampaignGalleryFiles) {
           const uploadedUrl = await uploadFile(
