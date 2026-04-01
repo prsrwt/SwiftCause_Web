@@ -44,12 +44,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
 import com.example.swiftcause.R
+import com.example.swiftcause.ui.components.SkeletonBox
 import com.example.swiftcause.domain.models.Campaign
 import com.example.swiftcause.ui.theme.PrimaryGreen
 import com.example.swiftcause.ui.theme.WarmWhite
 import com.example.swiftcause.utils.CurrencyFormatter
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import coil.request.ImageRequest
 
 @Composable
 fun CampaignDetailsScreen(
@@ -59,6 +65,7 @@ fun CampaignDetailsScreen(
 ) {
     android.util.Log.d("CampaignDetails", "Screen rendered for campaign: ${campaign.title}, videoUrl: '${campaign.videoUrl}'")
 
+    val context = LocalContext.current
     var selectedAmount by remember { mutableLongStateOf(0L) }
     var customAmount by remember { mutableStateOf("") }
     var isRecurring by remember { mutableStateOf(false) }
@@ -67,6 +74,18 @@ fun CampaignDetailsScreen(
 
     val images = campaign.getAllImages()
     val scrollState = rememberScrollState()
+
+    // Preload all carousel images using Coil's default caching
+    LaunchedEffect(images) {
+        val imageLoader = coil.ImageLoader(context)
+        images.forEach { imageUrl ->
+            val request = ImageRequest.Builder(context)
+                .data(imageUrl)
+                .build()
+            imageLoader.enqueue(request)
+        }
+        android.util.Log.d("CampaignDetails", "Preloading ${images.size} images")
+    }
 
     // Auto-rotate carousel
     LaunchedEffect(images.size) {
@@ -255,6 +274,7 @@ private fun ImageCarousel(
     campaignTitle: String,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     Box(modifier = modifier) {
         Card(
             modifier = Modifier
@@ -264,12 +284,25 @@ private fun ImageCarousel(
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Box {
-                AsyncImage(
-                    model = images.getOrNull(currentIndex) ?: "",
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(images.getOrNull(currentIndex) ?: "")
+                        .crossfade(true)
+                        .build(),
                     contentDescription = stringResource(R.string.content_description_campaign_image, campaignTitle),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
-                )
+                ) {
+                    val state = painter.state
+                    if (state is AsyncImagePainter.State.Loading || state is AsyncImagePainter.State.Empty) {
+                        SkeletonBox(
+                            modifier = Modifier.fillMaxSize(),
+                            shape = RoundedCornerShape(0.dp)
+                        )
+                    } else {
+                        SubcomposeAsyncImageContent()
+                    }
+                }
 
                 // Gradient overlay at bottom
                 Box(
@@ -890,12 +923,22 @@ private fun YouTubeVideoPlayer(
                         )
                     } else {
                         // Thumbnail with play button
-                        AsyncImage(
+                        SubcomposeAsyncImage(
                             model = "https://img.youtube.com/vi/$videoId/hqdefault.jpg",
                             contentDescription = stringResource(R.string.watch_video),
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
-                        )
+                        ) {
+                            val state = painter.state
+                            if (state is AsyncImagePainter.State.Loading || state is AsyncImagePainter.State.Empty) {
+                                SkeletonBox(
+                                    modifier = Modifier.fillMaxSize(),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                            } else {
+                                SubcomposeAsyncImageContent()
+                            }
+                        }
 
                         // Play button
                         Box(
