@@ -45,8 +45,12 @@ const { logAuthEvent } = require('./handlers/auth');
 const crypto = require('crypto');
 
 // CORS Configuration - restrict to your domains
+// Must match domains used in payments.js to prevent CORS errors
 const ALLOWED_ORIGINS = [
   'https://swiftcause--swiftcause-app.us-east4.hosted.app',
+  'https://swiftcause--swiftcause-prod.europe-west4.hosted.app',
+  'https://swiftcause.com',
+  'https://swift-cause-web.vercel.app',
   'http://localhost:3000',
   'http://localhost:3001',
 ];
@@ -218,13 +222,46 @@ exports.validateMagicLinkToken = functions.https.onRequest(async (req, res) => {
         tokenId,
         status: tokenData.status,
         blocked: tokenData.blocked,
-        attempts: tokenData.validationAttempts,
+        attempts: tokenData.validationAttempts || 0,
       });
+
+      // Check if token is already blocked
+      if (tokenData.blocked === true) {
+        console.warn('⚠️ [Validate Token] Token blocked due to abuse');
+        return {
+          status: 403,
+          response: {
+            valid: false,
+            error: 'TOKEN_BLOCKED',
+          },
+        };
+      }
+
+      // Check if this would be the blocking attempt (before incrementing)
+      const currentAttempts = tokenData.validationAttempts || 0;
+      if (currentAttempts >= MAX_VALIDATION_ATTEMPTS) {
+        console.warn('⚠️ [Validate Token] Token has reached max attempts, blocking');
+
+        // Mark as blocked
+        transaction.update(tokenRef, {
+          blocked: true,
+          lastAttemptAt: admin.firestore.Timestamp.now(),
+          lastAttemptIp: clientIp,
+        });
+
+        return {
+          status: 403,
+          response: {
+            valid: false,
+            error: 'TOKEN_BLOCKED',
+          },
+        };
+      }
 
       // Helper function to track failed validation attempts
       // Only increments attempts when validation fails to prevent blocking legitimate users
       const trackFailedAttempt = (errorCode) => {
-        const newAttempts = (tokenData.validationAttempts || 0) + 1;
+        const newAttempts = currentAttempts + 1;
         const shouldBlock = newAttempts >= MAX_VALIDATION_ATTEMPTS;
 
         transaction.update(tokenRef, {
@@ -242,18 +279,6 @@ exports.validateMagicLinkToken = functions.https.onRequest(async (req, res) => {
 
         return shouldBlock;
       };
-
-      // Check if token is blocked
-      if (tokenData.blocked === true) {
-        console.warn('⚠️ [Validate Token] Token blocked due to abuse');
-        return {
-          status: 403,
-          response: {
-            valid: false,
-            error: 'TOKEN_BLOCKED',
-          },
-        };
-      }
 
       // Check if token is already consumed
       if (tokenData.status === 'consumed') {
@@ -416,6 +441,18 @@ exports.consumeMagicLinkToken = functions.https.onRequest(async (req, res) => {
       const tokenData = tokenSnap.data();
 
       console.log('🔵 [Consume Token] Token status:', tokenData.status);
+
+      // Check if token is blocked (CRITICAL: prevent consuming blocked tokens)
+      if (tokenData.blocked === true) {
+        console.warn('⚠️ [Consume Token] Token blocked due to abuse');
+        return {
+          status: 403,
+          response: {
+            success: false,
+            error: 'TOKEN_BLOCKED',
+          },
+        };
+      }
 
       // Check if token is expired (CRITICAL: prevent consuming expired tokens)
       const now = Date.now();

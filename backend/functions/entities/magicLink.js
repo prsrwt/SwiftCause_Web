@@ -3,6 +3,7 @@ const admin = require('firebase-admin');
 
 // Constants
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000; // 30 days as per Issue #587
+const TWO_MINUTES_MS = 2 * 60 * 1000; // 2 minutes for ephemeral token
 
 /**
  * Helper function to parse boolean values from metadata
@@ -13,13 +14,13 @@ const isTrue = (val) => val === true || val === 'true';
 
 /**
  * Determine magic link purpose based on metadata
- * Magic link ALWAYS generated for Gift Aid campaigns (replaces on-screen capture)
+ * Magic link generated for campaigns with Gift Aid enabled (not based on donor opt-in)
  * @param {object} metadata - Payment intent metadata
  * @return {string|null} Purpose or null if no magic link needed
  */
 const determinePurpose = (metadata) => {
-  // Campaign has Gift Aid enabled
-  const campaignHasGiftAid = isTrue(metadata.isGiftAid);
+  // Campaign has Gift Aid enabled (NOT whether donor opted in)
+  const campaignHasGiftAid = isTrue(metadata.giftAidEnabled);
 
   // Donor expressed interest in recurring donations
   // Check both 'recurringInterest' (future) and 'isRecurring' (current implementation)
@@ -91,6 +92,7 @@ const generateMagicLinkToken = async ({
 
   // References
   const tokenRef = db.collection('magicLinkTokens').doc(paymentIntentId);
+  const ephemeralRef = db.collection('magicLinkEphemeral').doc(paymentIntentId);
   const donationRef = db.collection('donations').doc(donationId);
 
   console.log('🔵 [Magic Link] Starting transaction', { paymentIntentId });
@@ -132,25 +134,30 @@ const generateMagicLinkToken = async ({
       // 3. SET EXPIRY
       const now = admin.firestore.Timestamp.now();
       const expiresAt = admin.firestore.Timestamp.fromMillis(now.toMillis() + THIRTY_DAYS_MS);
+      const ephemeralExpiresAt = admin.firestore.Timestamp.fromMillis(
+        now.toMillis() + TWO_MINUTES_MS,
+      );
 
       console.log('🔵 [Magic Link] Transaction: Expiry set', {
         paymentIntentId,
         expiresAt: expiresAt.toDate().toISOString(),
+        ephemeralExpiresAt: ephemeralExpiresAt.toDate().toISOString(),
       });
 
       // 4. CREATE CONSENT EVENT REFERENCE (auto-generated ID)
       const consentRef = donationRef.collection('ConsentEvents').doc();
 
-      console.log('🔵 [Magic Link] Transaction: Writing 3 documents atomically', {
+      console.log('🔵 [Magic Link] Transaction: Writing 4 documents atomically', {
         paymentIntentId,
         tokenDocId: paymentIntentId,
+        ephemeralDocId: paymentIntentId,
         consentEventId: consentRef.id,
         donationId,
       });
 
       // 5. ATOMIC WRITES - ALL IN ONE TRANSACTION
 
-      // 5a. Create token document
+      // 5a. Create secure token document (backend only)
       transaction.set(tokenRef, {
         tokenHash: tokenHash,
         paymentIntentId: paymentIntentId,
@@ -172,7 +179,14 @@ const generateMagicLinkToken = async ({
         lastAttemptIp: null,
       });
 
-      // 5b. Create consent event (implicit consent from kiosk T&Cs)
+      // 5b. Create ephemeral document (public, time-restricted)
+      transaction.set(ephemeralRef, {
+        plainToken: plainToken,
+        expiresAt: ephemeralExpiresAt,
+        createdAt: now,
+      });
+
+      // 5c. Create consent event (implicit consent from kiosk T&Cs)
       transaction.set(consentRef, {
         id: consentRef.id,
         type: 'implicit',
@@ -186,7 +200,7 @@ const generateMagicLinkToken = async ({
         userAgent: 'kiosk',
       });
 
-      // 5c. Update donation document (merge to prevent failure if doesn't exist)
+      // 5d. Update donation document (merge to prevent failure if doesn't exist)
       transaction.set(
         donationRef,
         {

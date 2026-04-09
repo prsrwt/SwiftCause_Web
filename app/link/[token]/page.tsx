@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { use } from 'react';
 
 interface ValidationResult {
   valid: boolean;
@@ -15,9 +16,9 @@ interface ValidationResult {
   error?: string;
 }
 
-export default function MagicLinkPage({ params }: { params: { token: string } }) {
+export default function MagicLinkPage({ params }: { params: Promise<{ token: string }> }) {
   const router = useRouter();
-  const token = params.token;
+  const { token } = use(params);
   const [validating, setValidating] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);

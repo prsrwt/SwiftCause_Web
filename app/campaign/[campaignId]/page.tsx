@@ -81,52 +81,43 @@ export default function CampaignPage({ params }: { params: Promise<{ campaignId:
     }
   };
 
-  // Donate from details screen - check giftAidEnabled before routing
+  // Donate from details screen - skip Gift Aid and go directly to payment
   const handleDonate = (
     _campaign: Campaign,
     amount: number,
     options: { isRecurring: boolean; recurringInterval: 'monthly' | 'quarterly' | 'yearly' },
   ) => {
-    const recurringQuery = options.isRecurring
-      ? `&recurring=true&interval=${options.recurringInterval}`
-      : '';
+    const amountPence = Math.round(amount * 100);
 
-    // Check if Gift Aid is enabled for this campaign
-    if (_campaign.configuration.giftAidEnabled) {
-      // Route to Gift Aid flow
-      router.push(
-        `/campaign/${campaignId}?amount=${amount}&giftaid=true&from=details${recurringQuery}`,
-      );
-    } else {
-      // Skip Gift Aid and go directly to payment
-      const amountPence = Math.round(amount * 100);
-
-      // Get donor info from sessionStorage if recurring
-      let donorEmail = '';
-      let donorName = '';
-      if (options.isRecurring) {
-        donorEmail = sessionStorage.getItem('donorEmail') || '';
-        donorName = sessionStorage.getItem('donorName') || '';
-      }
-
-      const donation = {
-        campaignId: _campaign.id,
-        amount: amountPence,
-        isGiftAid: false,
-        giftAidAccepted: false, // Explicitly set to false when disabled
-        isRecurring: options.isRecurring,
-        recurringInterval: options.isRecurring ? options.recurringInterval : undefined,
-        kioskId: currentKioskSession?.kioskId,
-        donorEmail: donorEmail,
-        donorName: donorName || 'Anonymous',
-      };
-      sessionStorage.setItem('donation', JSON.stringify(donation));
-      sessionStorage.setItem('paymentBackPath', `/campaign/${campaignId}`);
-      router.push(`/payment/${campaignId}`);
+    // Get donor info from sessionStorage if recurring
+    let donorEmail = '';
+    let donorName = '';
+    if (options.isRecurring) {
+      donorEmail = sessionStorage.getItem('donorEmail') || '';
+      donorName = sessionStorage.getItem('donorName') || '';
     }
+
+    // Skip Gift Aid and go directly to payment
+    // isGiftAid should be FALSE - donor hasn't opted in yet
+    // Magic link will be generated based on campaign.configuration.giftAidEnabled
+    const donation = {
+      campaignId: _campaign.id,
+      amount: amountPence,
+      isGiftAid: false, // Donor hasn't opted in yet
+      giftAidAccepted: false,
+      giftAidEnabled: _campaign.configuration.giftAidEnabled, // Campaign supports Gift Aid
+      isRecurring: options.isRecurring,
+      recurringInterval: options.isRecurring ? options.recurringInterval : undefined,
+      kioskId: currentKioskSession?.kioskId,
+      donorEmail: donorEmail,
+      donorName: donorName || 'Anonymous',
+    };
+    sessionStorage.setItem('donation', JSON.stringify(donation));
+    sessionStorage.setItem('paymentBackPath', `/campaign/${campaignId}`);
+    router.push(`/payment/${campaignId}`);
   };
 
-  // Gift Aid accepted - save details and go to payment
+  // Gift Aid accepted - save details and go to payment (or thank you for magic link)
   const handleAcceptGiftAid = async (details: GiftAidDetails) => {
     if (!campaign) {
       setError('Campaign not loaded. Please try again.');
@@ -139,7 +130,7 @@ export default function CampaignPage({ params }: { params: Promise<{ campaignId:
       // Consume magic link token if present (from magic link flow)
       if (fromMagicLink && tokenId) {
         try {
-          await fetch(
+          const response = await fetch(
             'https://us-central1-swiftcause-app.cloudfunctions.net/consumeMagicLinkToken',
             {
               method: 'POST',
@@ -149,12 +140,48 @@ export default function CampaignPage({ params }: { params: Promise<{ campaignId:
               body: JSON.stringify({ tokenId }),
             },
           );
+
+          const data = await response.json();
+
+          if (!response.ok || !data.success) {
+            console.error('Failed to consume magic link token:', data.error);
+            // Show error to user - token consumption failed
+            setError(
+              `Unable to complete Gift Aid submission: ${data.error || 'Unknown error'}. Please contact support.`,
+            );
+            return;
+          }
         } catch (tokenError) {
-          // Non-critical error - don't block user flow
           console.error('Failed to consume magic link token:', tokenError);
+          setError('Unable to complete Gift Aid submission. Please contact support.');
+          return;
         }
+
+        // For magic link flow: Show thank you screen instead of payment
+        // Payment was already completed before the magic link was sent
+        const donationAmountPounds = details.donationAmount / 100;
+        const giftAidBonus = donationAmountPounds * 0.25;
+        const totalImpact = donationAmountPounds + giftAidBonus;
+
+        // Store data for thank you screen
+        sessionStorage.setItem(
+          'giftAidThankYou',
+          JSON.stringify({
+            campaignTitle: campaign.title,
+            donationAmount: donationAmountPounds,
+            giftAidBonus,
+            totalImpact,
+            donorName: `${details.firstName} ${details.surname}`,
+            declarationId,
+          }),
+        );
+
+        // Redirect to thank you page
+        router.push(`/gift-aid-thank-you?campaign=${campaignId}`);
+        return;
       }
 
+      // Regular flow: Continue to payment
       const donation = {
         campaignId: campaign.id,
         amount: details.donationAmount,
@@ -180,6 +207,9 @@ export default function CampaignPage({ params }: { params: Promise<{ campaignId:
         'paymentBackPath',
         `${window.location.pathname}${window.location.search}`,
       );
+
+      // COMMENTED OUT: Payment flow for magic link (payment already completed)
+      // Uncomment this line if you want to enable payment after Gift Aid for regular flow
       router.push(`/payment/${campaignId}`);
     } catch (submitError) {
       console.error('Failed to submit Gift Aid declaration before payment:', submitError);
@@ -188,12 +218,14 @@ export default function CampaignPage({ params }: { params: Promise<{ campaignId:
   };
 
   // Gift Aid declined - save donation and go to payment
+  // NOTE: This should NOT be called in magic link flow (payment already completed)
   const handleDeclineGiftAid = (finalAmount: number) => {
     const amountPence = Math.round(finalAmount * 100);
     const donation = {
       campaignId: campaign?.id,
       amount: amountPence,
-      isGiftAid: true, // Campaign HAS Gift Aid enabled (even though user declined)
+      isGiftAid: false, // User DECLINED Gift Aid
+      giftAidEnabled: campaign?.configuration.giftAidEnabled || false, // Campaign supports it
       giftAidAccepted: false, // User DECLINED Gift Aid
       isRecurring: isRecurringSelection,
       recurringInterval: isRecurringSelection ? recurringIntervalParam : undefined,
