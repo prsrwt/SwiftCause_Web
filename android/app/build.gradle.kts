@@ -14,12 +14,19 @@ android {
 
     defaultConfig {
         applicationId = "com.example.swiftcause"
-        minSdk = 24
+        minSdk = 26  // Required by Stripe Terminal SDK for Tap to Pay
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Stripe publishable key (safe to commit - it's meant to be public)
+        buildConfigField(
+            "String",
+            "STRIPE_PUBLISHABLE_KEY",
+            "\"pk_test_51RbHd9QKGKb5ypYFiKavxDZPvuYS2yQwSdXZ5Ul7EC74vZOoKnDvMfsLyfgXEpWxA51ozDTTV40OiiuK0STTmiyR00c1O0o9jh\""
+        )
     }
 
     buildTypes {
@@ -40,6 +47,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -57,6 +65,7 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.functions)
     
     // Networking
     implementation(libs.retrofit)
@@ -76,6 +85,14 @@ dependencies {
     
     // Coil for image loading
     implementation(libs.coil.compose)
+    
+    // Stripe Payment SDK
+    implementation(libs.stripe.android)
+    
+    // Stripe Terminal SDK (for Tap to Pay)
+    implementation(libs.stripe.terminal)
+    implementation(libs.stripe.terminal.ktx)
+    implementation(libs.stripe.terminal.taptopay)
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
