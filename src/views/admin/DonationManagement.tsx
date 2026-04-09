@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '../../shared/ui/button';
+import { Input } from '../../shared/ui/input';
 import { Label } from '../../shared/ui/label';
 import { Card, CardContent } from '../../shared/ui/card';
 import { Badge } from '../../shared/ui/badge';
@@ -28,7 +29,10 @@ import {
 import { Skeleton } from '../../shared/ui/skeleton'; // Import Skeleton
 import { Ghost } from 'lucide-react'; // Import Ghost
 import { Screen, AdminSession, Permission, Donation } from '../../shared/types';
-import { getDonations } from '../../shared/lib/hooks/donationsService';
+import {
+  exportDonations,
+  type DonationExportRange,
+} from '../../entities/donation/api/donationExportApi';
 import { useDonations } from '../../shared/lib/hooks/useDonations';
 import { PaginationControls } from '../../shared/ui/PaginationControls';
 import {
@@ -38,10 +42,10 @@ import {
 import { SortableTableHeader } from './components/SortableTableHeader';
 import { useTableSort } from '../../shared/lib/hooks/useTableSort';
 import { formatCurrency } from '../../shared/lib/currencyFormatter';
+import { useToast } from '../../shared/ui/ToastProvider';
 
 import { getAllCampaigns } from '../../shared/api';
 import { AdminLayout } from './AdminLayout';
-import { exportToCsv } from '../../shared/utils/csvExport';
 import { useOrganization } from '../../shared/lib/hooks/useOrganization';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../shared/lib/firebase';
@@ -101,6 +105,7 @@ export function DonationManagement({
   userSession,
   hasPermission,
 }: DonationManagementProps) {
+  const { showToast } = useToast();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [kiosks, setKiosks] = useState<Kiosk[]>([]);
 
@@ -113,6 +118,10 @@ export function DonationManagement({
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
   const [selectedDonation, setSelectedDonation] = useState<FetchedDonation | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  const [exportRange, setExportRange] = useState<DonationExportRange>('current_month');
+  const [exportStartDate, setExportStartDate] = useState('');
+  const [exportEndDate, setExportEndDate] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
 
   const {
     donations: pagedDonations,
@@ -132,7 +141,6 @@ export function DonationManagement({
     // isRecurring handled client-side to avoid needing compound indexes
   });
 
-  // Fetch campaigns and kiosks for display mapping (not paginated — small datasets)
   const fetchAllData = useCallback(async () => {
     try {
       const kiosksRef = collection(db, 'kiosks');
@@ -261,8 +269,6 @@ export function DonationManagement({
     }
   };
 
-  // Client-side search, date, and recurring filters on current page
-  // Status and campaignId are server-side via useDonations
   const filteredDonationsData = pagedDonations
     .filter((donation: Donation) => {
       const campaignName = getCampaignDisplayName(donation as FetchedDonation);
@@ -293,7 +299,6 @@ export function DonationManagement({
       } as FetchedDonation;
     });
 
-  // Use sorting hook
   const {
     sortedData: filteredDonations,
     sortKey,
@@ -348,24 +353,36 @@ export function DonationManagement({
   };
 
   const handleExportDonations = async () => {
-    const allDonations = await getDonations(userSession.user.organizationId || '');
-    const rows = (allDonations as FetchedDonation[]).map((donation) => ({
-      donorName: donation.donorName || 'Anonymous',
-      donorEmail: donation.donorEmail || '',
-      campaign: getCampaignDisplayName(donation),
-      amount: donation.amount || 0,
-      currency: donation.currency || '',
-      paymentStatus: donation.paymentStatus || '',
-      isGiftAid: donation.isGiftAid ? 'Yes' : 'No',
-      isRecurring: isRecurringDonation(donation) ? 'Yes' : 'No',
-      recurringInterval: donation.recurringInterval || '',
-      subscriptionId: donation.subscriptionId || '',
-      invoiceId: donation.invoiceId || '',
-      transactionId: donation.stripePaymentIntentId || donation.transactionId || donation.id || '',
-      platform: donation.platform || '',
-      timestamp: donation.timestamp || '',
-    }));
-    exportToCsv(rows, 'donations');
+    // Guard rails:
+    // 1) Only users with export permission can export.
+    // 2) Organization must be selected.
+    if (!hasPermission('export_donations')) return;
+    if (!userSession.user.organizationId) return;
+
+    if (exportRange === 'custom' && (!exportStartDate || !exportEndDate)) {
+      showToast('Select both start and end dates for custom range.', 'warning');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      // Backend handles time filtering and CSV generation.
+      // The response is a CSV file which we immediately download.
+      await exportDonations({
+        organizationId: userSession.user.organizationId,
+        range: exportRange,
+        startDate: exportRange === 'custom' ? exportStartDate : undefined,
+        endDate: exportRange === 'custom' ? exportEndDate : undefined,
+      });
+      showToast('Donation export started. Your download should begin shortly.', 'success');
+    } catch (exportError) {
+      console.error('Donation export failed:', exportError);
+      const message =
+        exportError instanceof Error ? exportError.message : 'Failed to export donations.';
+      showToast(message, 'error');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleViewDetails = (donation: FetchedDonation) => {
@@ -404,9 +421,10 @@ export function DonationManagement({
             size="sm"
             className="rounded-2xl border-[#064e3b] bg-transparent text-[#064e3b] hover:bg-emerald-50 hover:border-emerald-600 hover:shadow-md hover:shadow-emerald-900/10 hover:scale-105 transition-all duration-300 px-5"
             onClick={handleExportDonations}
+            disabled={isExporting}
           >
             <Download className="h-4 w-4 sm:hidden" />
-            <span className="hidden sm:inline">Export</span>
+            <span className="hidden sm:inline">{isExporting ? 'Exporting...' : 'Export'}</span>
           </Button>
         ) : undefined
       }
@@ -500,6 +518,57 @@ export function DonationManagement({
               </Button>
             }
           />
+
+          {hasPermission('export_donations') ? (
+            <Card className="rounded-3xl border border-gray-100 shadow-sm mt-6">
+              <CardContent className="p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-700">Export Range</Label>
+                    <select
+                      value={exportRange}
+                      // Select between current month, past month, or a custom range.
+                      onChange={(event) =>
+                        setExportRange(event.target.value as DonationExportRange)
+                      }
+                      className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-emerald-500 focus:outline-none"
+                    >
+                      <option value="current_month">Current month</option>
+                      <option value="past_month">Past month</option>
+                      <option value="custom">Custom range</option>
+                    </select>
+                  </div>
+
+                  {exportRange === 'custom' ? (
+                    <div className="grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-gray-700">Start date</Label>
+                        <Input
+                          type="date"
+                          // HTML date input provides YYYY-MM-DD string.
+                          value={exportStartDate}
+                          onChange={(event) => setExportStartDate(event.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-gray-700">End date</Label>
+                        <Input
+                          type="date"
+                          // HTML date input provides YYYY-MM-DD string.
+                          value={exportEndDate}
+                          onChange={(event) => setExportEndDate(event.target.value)}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-500">
+                      Export will include donations within the selected month.
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
 
           {/* Modern Table Container - Desktop */}
           <Card className="overflow-hidden rounded-3xl border border-gray-100 shadow-sm mt-6 hidden md:block">
