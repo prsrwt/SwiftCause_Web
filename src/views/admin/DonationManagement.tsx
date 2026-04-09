@@ -122,6 +122,7 @@ export function DonationManagement({
   const [exportStartDate, setExportStartDate] = useState('');
   const [exportEndDate, setExportEndDate] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+  const [isMobileExportMenuOpen, setIsMobileExportMenuOpen] = useState(false);
 
   const {
     donations: pagedDonations,
@@ -374,6 +375,7 @@ export function DonationManagement({
         startDate: exportRange === 'custom' ? exportStartDate : undefined,
         endDate: exportRange === 'custom' ? exportEndDate : undefined,
       });
+      setIsMobileExportMenuOpen(false);
       showToast('Donation export started. Your download should begin shortly.', 'success');
     } catch (exportError) {
       console.error('Donation export failed:', exportError);
@@ -416,16 +418,133 @@ export function DonationManagement({
       onHeaderSearchChange={setSearchTerm}
       headerTopRightActions={
         hasPermission('export_donations') ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-2xl border-[#064e3b] bg-transparent text-[#064e3b] hover:bg-emerald-50 hover:border-emerald-600 hover:shadow-md hover:shadow-emerald-900/10 hover:scale-105 transition-all duration-300 px-5"
-            onClick={handleExportDonations}
-            disabled={isExporting}
-          >
-            <Download className="h-4 w-4 sm:hidden" />
-            <span className="hidden sm:inline">{isExporting ? 'Exporting...' : 'Export'}</span>
-          </Button>
+          <div className="flex w-full justify-end">
+            <div className="relative sm:hidden">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-xl border-[#064e3b] bg-transparent px-4 text-[#064e3b] transition-all duration-300 hover:border-emerald-600 hover:bg-emerald-50"
+                onClick={() => setIsMobileExportMenuOpen((current) => !current)}
+                disabled={isExporting}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                <span>{isExporting ? 'Exporting...' : 'Export'}</span>
+              </Button>
+
+              {isMobileExportMenuOpen ? (
+                <div className="absolute right-0 top-11 z-20 w-[280px] rounded-2xl border border-gray-200 bg-white p-3 shadow-lg">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-gray-600">Export range</Label>
+                    <select
+                      value={exportRange}
+                      onChange={(event) =>
+                        setExportRange(event.target.value as DonationExportRange)
+                      }
+                      className="h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-emerald-500 focus:outline-none"
+                    >
+                      <option value="current_month">Current month</option>
+                      <option value="past_month">Past month</option>
+                      <option value="custom">Custom range</option>
+                    </select>
+                  </div>
+
+                  {exportRange === 'custom' ? (
+                    <div className="mt-3 grid grid-cols-1 gap-2">
+                      <div>
+                        <Label className="mb-1 block text-xs font-medium text-gray-600">
+                          Start
+                        </Label>
+                        <Input
+                          type="date"
+                          value={exportStartDate}
+                          onChange={(event) => setExportStartDate(event.target.value)}
+                          className="h-9"
+                        />
+                      </div>
+                      <div>
+                        <Label className="mb-1 block text-xs font-medium text-gray-600">End</Label>
+                        <Input
+                          type="date"
+                          value={exportEndDate}
+                          onChange={(event) => setExportEndDate(event.target.value)}
+                          className="h-9"
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 flex-1 rounded-xl"
+                      onClick={() => setIsMobileExportMenuOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 flex-1 rounded-xl border-[#064e3b] text-[#064e3b] hover:bg-emerald-50"
+                      onClick={handleExportDonations}
+                      disabled={isExporting}
+                    >
+                      {isExporting ? 'Exporting...' : 'Export'}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="hidden sm:flex sm:flex-row sm:flex-wrap sm:items-end sm:justify-end sm:gap-2">
+              <div className="sm:min-w-[170px]">
+                <Label className="mb-1 block text-xs font-medium text-gray-600">Export range</Label>
+                <select
+                  value={exportRange}
+                  onChange={(event) => setExportRange(event.target.value as DonationExportRange)}
+                  className="h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-emerald-500 focus:outline-none"
+                >
+                  <option value="current_month">Current month</option>
+                  <option value="past_month">Past month</option>
+                  <option value="custom">Custom range</option>
+                </select>
+              </div>
+
+              {exportRange === 'custom' ? (
+                <>
+                  <div className="sm:min-w-[145px]">
+                    <Label className="mb-1 block text-xs font-medium text-gray-600">Start</Label>
+                    <Input
+                      type="date"
+                      value={exportStartDate}
+                      onChange={(event) => setExportStartDate(event.target.value)}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="sm:min-w-[145px]">
+                    <Label className="mb-1 block text-xs font-medium text-gray-600">End</Label>
+                    <Input
+                      type="date"
+                      value={exportEndDate}
+                      onChange={(event) => setExportEndDate(event.target.value)}
+                      className="h-9"
+                    />
+                  </div>
+                </>
+              ) : null}
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-xl border-[#064e3b] bg-transparent px-4 text-[#064e3b] transition-all duration-300 hover:border-emerald-600 hover:bg-emerald-50 hover:shadow-md hover:shadow-emerald-900/10"
+                onClick={handleExportDonations}
+                disabled={isExporting}
+              >
+                <Download className="h-4 w-4 sm:mr-2" />
+                <span>{isExporting ? 'Exporting...' : 'Export'}</span>
+              </Button>
+            </div>
+          </div>
         ) : undefined
       }
     >
@@ -518,57 +637,6 @@ export function DonationManagement({
               </Button>
             }
           />
-
-          {hasPermission('export_donations') ? (
-            <Card className="rounded-3xl border border-gray-100 shadow-sm mt-6">
-              <CardContent className="p-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-700">Export Range</Label>
-                    <select
-                      value={exportRange}
-                      // Select between current month, past month, or a custom range.
-                      onChange={(event) =>
-                        setExportRange(event.target.value as DonationExportRange)
-                      }
-                      className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-emerald-500 focus:outline-none"
-                    >
-                      <option value="current_month">Current month</option>
-                      <option value="past_month">Past month</option>
-                      <option value="custom">Custom range</option>
-                    </select>
-                  </div>
-
-                  {exportRange === 'custom' ? (
-                    <div className="grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-gray-700">Start date</Label>
-                        <Input
-                          type="date"
-                          // HTML date input provides YYYY-MM-DD string.
-                          value={exportStartDate}
-                          onChange={(event) => setExportStartDate(event.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-gray-700">End date</Label>
-                        <Input
-                          type="date"
-                          // HTML date input provides YYYY-MM-DD string.
-                          value={exportEndDate}
-                          onChange={(event) => setExportEndDate(event.target.value)}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-sm text-gray-500">
-                      Export will include donations within the selected month.
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
 
           {/* Modern Table Container - Desktop */}
           <Card className="overflow-hidden rounded-3xl border border-gray-100 shadow-sm mt-6 hidden md:block">
