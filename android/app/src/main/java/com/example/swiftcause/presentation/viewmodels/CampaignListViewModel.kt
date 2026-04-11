@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 
 data class CampaignListUiState(
     val campaigns: List<Campaign> = emptyList(),
-    val isLoading: Boolean = false,
+    val isLoading: Boolean = true,
     val error: String? = null,
     val selectedCampaign: Campaign? = null
 )

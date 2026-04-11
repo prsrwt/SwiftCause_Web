@@ -35,7 +35,7 @@ const createOnboardingLink = (req, res) => {
     try {
       // Ensure Stripe is initialized
       const stripeClient = ensureStripeInitialized();
-      
+
       // Verify authentication
       const auth = await verifyAuth(req);
 
@@ -145,7 +145,7 @@ const createKioskPaymentIntent = (req, res) => {
     try {
       // Ensure Stripe is initialized
       const stripeClient = ensureStripeInitialized();
-      
+
       const {
         amount,
         currency = "usd",
@@ -320,7 +320,7 @@ const createPaymentIntent = async (req, res) => {
   try {
     // Ensure Stripe is initialized
     const stripeClient = ensureStripeInitialized();
-    
+
     const auth = await verifyAuth(req);
     const uid = auth.uid;
     const email = auth.email;

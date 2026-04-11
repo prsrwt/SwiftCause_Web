@@ -261,18 +261,13 @@ fun CampaignDetailsScreen(
             onRecurringToggle = { isRecurring = it },
             onIntervalSelected = { selectedInterval = it },
             onRecurringEmailChanged = { recurringEmail = it },
-            onDonateClick = {
-                val amountInMajorUnits = if (selectedAmount > 0) selectedAmount else customAmount.toLongOrNull() ?: 0L
-                if (amountInMajorUnits > 0) {
-                    // Convert to minor units (cents/pence) by multiplying by 100
-                    val amountInMinorUnits = amountInMajorUnits * 100
-                    onDonateClick(
-                        amountInMinorUnits,
-                        isRecurring,
-                        if (isRecurring) selectedInterval else null,
-                        if (isRecurring) recurringEmail else null
-                    )
-                }
+            onAmountDonateClick = { amountInMinorUnits ->
+                onDonateClick(
+                    amountInMinorUnits,
+                    isRecurring,
+                    if (isRecurring) selectedInterval else null,
+                    if (isRecurring) recurringEmail else null
+                )
             },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
@@ -479,15 +474,13 @@ private fun DonationPanel(
     onRecurringToggle: (Boolean) -> Unit,
     onIntervalSelected: (String) -> Unit,
     onRecurringEmailChanged: (String) -> Unit,
-    onDonateClick: () -> Unit,
+    onAmountDonateClick: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val amounts = campaign.predefinedAmounts.ifEmpty { listOf(10L, 25L, 50L, 100L, 250L, 500L) }
 
     // Validate: amount > 0, and if recurring, email must be valid
     val isValidEmail = recurringEmail.contains("@") && recurringEmail.contains(".")
-    val isDonateEnabled = (selectedAmount > 0 || (customAmount.toLongOrNull() ?: 0) > 0) &&
-                         (!isRecurring || (isRecurring && isValidEmail))
 
     Surface(
         modifier = modifier
@@ -527,7 +520,12 @@ private fun DonationPanel(
                         amount = amount,
                         currency = campaign.currency,
                         isSelected = selectedAmount == amount,
-                        onClick = { onAmountSelected(amount) },
+                        onClick = {
+                            onAmountSelected(amount)
+                            if (!isRecurring || isValidEmail) {
+                                onAmountDonateClick(amount * 100)
+                            }
+                        },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -545,7 +543,12 @@ private fun DonationPanel(
                             amount = amount,
                             currency = campaign.currency,
                             isSelected = selectedAmount == amount,
-                            onClick = { onAmountSelected(amount) },
+                            onClick = {
+                                onAmountSelected(amount)
+                                if (!isRecurring || isValidEmail) {
+                                    onAmountDonateClick(amount * 100)
+                                }
+                            },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -667,32 +670,7 @@ private fun DonationPanel(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Donate button
-            Button(
-                onClick = onDonateClick,
-                enabled = isDonateEnabled,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(26.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = PrimaryGreen,
-                    disabledContainerColor = PrimaryGreen.copy(alpha = 0.5f)
-                ),
-                elevation = ButtonDefaults.buttonElevation(
-                    defaultElevation = 8.dp,
-                    pressedElevation = 4.dp
-                )
-            ) {
-                Text(
-                    text = stringResource(R.string.donate),
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.5.sp
-                )
-            }
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }

@@ -2,31 +2,45 @@ package com.example.swiftcause.presentation.screens
 
 import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.Image
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
 import com.example.swiftcause.BuildConfig
 import com.example.swiftcause.R
 import com.example.swiftcause.ui.theme.PrimaryGreen
@@ -45,10 +59,10 @@ fun ThankYouScreen(
     val totalSeconds = (DISMISS_DELAY_WITH_QR / 1000).toInt()
     var secondsRemaining by remember { mutableIntStateOf(totalSeconds) }
 
-    val animatedProgress by animateFloatAsState(
-        targetValue = secondsRemaining.toFloat() / totalSeconds,
+    val progress by animateFloatAsState(
+        targetValue = secondsRemaining.toFloat() / totalSeconds.toFloat(),
         animationSpec = tween(durationMillis = 1000, easing = LinearEasing),
-        label = "countdownProgress"
+        label = "resetProgress"
     )
 
     LaunchedEffect(magicLinkToken) {
@@ -60,136 +74,124 @@ fun ThankYouScreen(
         onDismiss()
     }
 
-    var showCheck by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        showCheck = true
-    }
-
-    val scale by animateFloatAsState(
-        targetValue = if (showCheck) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "checkScale"
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF0FDF4)) // Light green background
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        // Animated Checkmark
-        Box(
-            modifier = Modifier
-                .size(100.dp)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                }
-                .clip(CircleShape)
-                .background(PrimaryGreen),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = "Success",
-                tint = Color.White,
-                modifier = Modifier.size(60.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Thank You Message
-        Text(
-            text = stringResource(R.string.thank_you_for_your_donation),
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF14532D), // Darker green
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // QR Code
-        val qrBitmap = remember(magicLinkToken) {
-            generateQrCode(magicLinkToken)
-        }
-        qrBitmap?.let {
-            Image(
-                bitmap = it.asImageBitmap(),
-                contentDescription = stringResource(R.string.qr_code_content_description),
-                modifier = Modifier.size(220.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Instructional Text
-        Text(
-            text = stringResource(R.string.scan_qr_for_gift_aid),
-            fontSize = 16.sp,
-            color = Color(0xFF166534), // Medium green
-            textAlign = TextAlign.Center,
-            modifier = Modifier.widthIn(max = 300.dp)
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Countdown Timer
-        CountdownCircle(
-            secondsRemaining = secondsRemaining,
-            progress = animatedProgress
-        )
-    }
-}
-
-@Composable
-private fun CountdownCircle(secondsRemaining: Int, progress: Float) {
-    val strokeWidth = with(LocalDensity.current) { 6.dp.toPx() }
-    val primaryColor = PrimaryGreen
-    val trackColor = Color(0xFFBBF7D0) // Light green track
+    val qrBitmap = remember(magicLinkToken) { generateQrCode(magicLinkToken) }
 
     Box(
-        modifier = Modifier.size(70.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xCC060A08))
+            .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = secondsRemaining.toString(),
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            color = primaryColor
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawBehind {
-                    drawArc(
-                        color = trackColor,
-                        startAngle = 0f,
-                        sweepAngle = 360f,
-                        useCenter = false,
-                        style = Stroke(width = strokeWidth)
+        Card(
+            modifier = Modifier.size(width = 760.dp, height = 560.dp),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1411))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(28.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp)
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = PrimaryGreen,
+                        modifier = Modifier.size(72.dp)
                     )
-                    drawArc(
-                        color = primaryColor,
-                        startAngle = -90f,
-                        sweepAngle = 360 * progress,
-                        useCenter = false,
-                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+
+                    Text(
+                        text = "Payment complete",
+                        color = Color.White,
+                        fontSize = 38.sp,
+                        lineHeight = 44.sp,
+                        fontWeight = FontWeight.Bold
                     )
+
+                    Text(
+                        text = "Thank you for your donation.",
+                        color = Color(0xFFBFD1C7),
+                        fontSize = 18.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "Returning to campaigns in ${secondsRemaining}s",
+                        color = Color(0xFF9FB5A8),
+                        fontSize = 14.sp
+                    )
+
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.height(8.dp),
+                        color = PrimaryGreen,
+                        trackColor = Color(0xFF2A3A32)
+                    )
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.height(54.dp)
+                    ) {
+                        Text("Done", fontWeight = FontWeight.Bold)
+                    }
                 }
-        )
+
+                Card(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF141D18))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.magic_link_title),
+                            color = Color.White,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = stringResource(R.string.scan_qr_for_gift_aid),
+                            color = Color(0xFFAEC3B6),
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(18.dp))
+
+                        qrBitmap?.let {
+                            Image(
+                                bitmap = it.asImageBitmap(),
+                                contentDescription = stringResource(R.string.qr_code_content_description),
+                                modifier = Modifier.size(240.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 private fun generateQrCode(token: String?): Bitmap? {
     if (token.isNullOrBlank()) return null
-    val fullUrl = "${BuildConfig.MAGIC_LINK_BASE_URL}/claim/$token"
+    val fullUrl = "${BuildConfig.MAGIC_LINK_BASE_URL}/link/$token"
     return try {
         val writer = QRCodeWriter()
         val hints = mapOf(EncodeHintType.MARGIN to 1)
@@ -201,8 +203,7 @@ private fun generateQrCode(token: String?): Bitmap? {
             }
         }
         bitmap
-    } catch (e: Exception) {
-        e.printStackTrace()
+    } catch (_: Exception) {
         null
     }
 }
