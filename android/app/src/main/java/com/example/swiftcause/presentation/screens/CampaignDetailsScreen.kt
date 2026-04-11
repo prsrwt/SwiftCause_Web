@@ -54,7 +54,6 @@ import com.example.swiftcause.ui.theme.PrimaryGreen
 import com.example.swiftcause.ui.theme.WarmWhite
 import com.example.swiftcause.utils.CurrencyFormatter
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import coil.request.ImageRequest
 
 @Composable
@@ -73,6 +72,7 @@ fun CampaignDetailsScreen(
     var selectedInterval by remember { mutableStateOf("monthly") }
     var recurringEmail by remember { mutableStateOf("") }
     var currentImageIndex by remember { mutableIntStateOf(0) }
+    var isLongDescriptionExpanded by remember { mutableStateOf(false) }
 
     val images = campaign.getAllImages()
     val scrollState = rememberScrollState()
@@ -109,7 +109,7 @@ fun CampaignDetailsScreen(
                 .fillMaxSize()
                 .background(WarmWhite)
                 .verticalScroll(scrollState)
-                .padding(bottom = 320.dp) // Space for fixed bottom panel
+                .padding(bottom = 340.dp)
         ) {
             // Header with back button
             if (showBackButton) {
@@ -154,95 +154,64 @@ fun CampaignDetailsScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Campaign Info Card
-            Card(
+            // Campaign Title + Summary
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    .padding(horizontal = 16.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
-                ) {
-                    // Title
-                    Text(
-                        text = campaign.title,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF0F172A),
-                        lineHeight = 31.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Short Description
-                    if (campaign.shortDescription.isNotEmpty()) {
-                        Text(
-                            text = campaign.shortDescription,
-                            fontSize = 15.sp,
-                            color = Color(0xFF334155),
-                            lineHeight = 23.sp
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                    }
-
-                    // Progress Section
-                    ProgressSection(campaign = campaign)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Long Description Card
-            if (campaign.longDescription.isNotEmpty()) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.about_campaign),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF0F172A)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Render HTML content
-                        RichTextContent(
-                            htmlContent = campaign.longDescription,
-                            textColor = Color(0xFF334155)
-                        )
-                    }
-                }
-            }
-
-            // YouTube Video Section
-            android.util.Log.d("CampaignDetails", "Video URL check: '${campaign.videoUrl}', isEmpty: ${campaign.videoUrl.isNullOrEmpty()}")
-            if (!campaign.videoUrl.isNullOrEmpty()) {
-                android.util.Log.d("CampaignDetails", "Rendering YouTube player for: ${campaign.videoUrl}")
-                Spacer(modifier = Modifier.height(16.dp))
-
-                YouTubeVideoPlayer(
-                    videoUrl = campaign.videoUrl!!,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
+                Text(
+                    text = campaign.title,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF0F172A),
+                    lineHeight = 28.sp
                 )
-            } else {
-                android.util.Log.d("CampaignDetails", "Video URL is null or empty, skipping video player")
+
+                if (campaign.shortDescription.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = campaign.shortDescription,
+                        fontSize = 14.sp,
+                        color = Color(0xFF334155),
+                        lineHeight = 20.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                ProgressSection(campaign = campaign)
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Collapsible long description
+            if (campaign.longDescription.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = if (isLongDescriptionExpanded) "Hide details" else stringResource(R.string.about_campaign),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isLongDescriptionExpanded = !isLongDescriptionExpanded }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PrimaryGreen
+                )
+
+                if (isLongDescriptionExpanded) {
+                    RichTextContent(
+                        htmlContent = campaign.longDescription,
+                        textColor = Color(0xFF334155),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    )
+                }
             }
         }
 
-        // Fixed Bottom Donation Panel
+        // Fixed Bottom Donation Panel (primary focus)
         DonationPanel(
             campaign = campaign,
             selectedAmount = selectedAmount,
@@ -486,13 +455,12 @@ private fun DonationPanel(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 16.dp,
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                spotColor = Color(0xFF0F172A).copy(alpha = 0.08f)
+                elevation = 0.dp,
+                shape = RoundedCornerShape(0.dp)
             ),
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        shape = RoundedCornerShape(0.dp),
         color = WarmWhite,
-        tonalElevation = 8.dp
+        tonalElevation = 0.dp
     ) {
         Column(
             modifier = Modifier
@@ -684,7 +652,7 @@ private fun AmountButton(
     modifier: Modifier = Modifier
 ) {
     val backgroundColor by animateColorAsState(
-        targetValue = if (isSelected) PrimaryGreen else WarmWhite,
+        targetValue = if (isSelected) PrimaryGreen else Color(0xFFEAF7F0),
         label = "bg"
     )
     val textColor by animateColorAsState(
@@ -699,22 +667,22 @@ private fun AmountButton(
     Box(
         modifier = modifier
             .scale(scale)
-            .height(52.dp)
+            .height(64.dp)
             .widthIn(min = 80.dp)
-            .clip(RoundedCornerShape(26.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(backgroundColor)
             .border(
                 width = if (isSelected) 0.dp else 1.dp,
-                color = if (isSelected) Color.Transparent else Color(0xFFE5E7EB),
-                shape = RoundedCornerShape(26.dp)
+                color = if (isSelected) Color.Transparent else PrimaryGreen.copy(alpha = 0.22f),
+                shape = RoundedCornerShape(12.dp)
             )
             .clickable { onClick() }
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = CurrencyFormatter.formatCurrencyFromMajor(amount, currency),
-            fontSize = 17.sp,
+            fontSize = 19.sp,
             fontWeight = FontWeight.SemiBold,
             color = textColor
         )
