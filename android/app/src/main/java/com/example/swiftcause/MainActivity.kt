@@ -2,6 +2,7 @@ package com.example.swiftcause
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.nfc.NfcAdapter
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -49,12 +50,6 @@ import com.stripe.android.PaymentConfiguration
 import com.stripe.android.paymentsheet.PaymentSheet
 import com.stripe.android.paymentsheet.PaymentSheetResult
 import com.stripe.android.paymentsheet.rememberPaymentSheet
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
 
 data class PendingDonation(
     val campaign: Campaign,
@@ -118,6 +113,7 @@ fun KioskMainContent(
     val clientSecret by paymentViewModel.clientSecret.collectAsState()
     val tapToPayState by tapToPayViewModel.state.collectAsState()
     val context = LocalContext.current
+    val hasNfcCapability = remember(context) { NfcAdapter.getDefaultAdapter(context) != null }
 
     // Track selected payment method (null = show selection, "card" or "tap")
     var selectedPaymentMethod by remember { mutableStateOf<String?>(null) }
@@ -307,7 +303,8 @@ fun KioskMainContent(
                         }
                     },
                     onDonateClick = { amount, isRecurring, interval, email ->
-                        // Store pending donation and show payment method selection
+                        // Auto-route payment method based on NFC capability:
+                        // NFC-capable device -> Tap to Pay, otherwise -> Card details.
                         pendingDonation = PendingDonation(
                             campaign = campaign,
                             amount = amount,
@@ -315,7 +312,17 @@ fun KioskMainContent(
                             interval = interval,
                             email = email
                         )
-                        selectedPaymentMethod = null // Trigger payment method selection
+
+                        selectedPaymentMethod = if (hasNfcCapability) "tap" else "card"
+                        handleDonation(
+                            campaign = campaign,
+                            amount = amount,
+                            isRecurring = isRecurring,
+                            interval = interval,
+                            email = email,
+                            paymentViewModel = paymentViewModel,
+                            kioskSession = kioskSession
+                        )
                     }
                 )
             }
@@ -391,120 +398,6 @@ fun KioskMainContent(
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
-                    }
-                }
-            }
-        }
-
-        // Payment method selection dialog
-        if (pendingDonation != null && selectedPaymentMethod == null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.6f))
-                    .clickable(enabled = false) {},
-                contentAlignment = Alignment.Center
-            ) {
-                androidx.compose.material3.Surface(
-                    modifier = Modifier
-                        .padding(32.dp)
-                        .width(320.dp),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-                    color = androidx.compose.ui.graphics.Color.White,
-                    shadowElevation = 8.dp
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(24.dp)
-                    ) {
-                        Text(
-                            text = "Choose Payment Method",
-                            fontSize = 20.sp,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        // Card Entry Button
-                        Button(
-                            onClick = {
-                                selectedPaymentMethod = "card"
-                                pendingDonation?.let { donation ->
-                                    handleDonation(
-                                        campaign = donation.campaign,
-                                        amount = donation.amount,
-                                        isRecurring = donation.isRecurring,
-                                        interval = donation.interval,
-                                        email = donation.email,
-                                        paymentViewModel = paymentViewModel,
-                                        kioskSession = kioskSession
-                                    )
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            )
-                        ) {
-                            Text(
-                                text = "💳 Enter Card Details",
-                                fontSize = 16.sp,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Tap to Pay Button (only if reader connected)
-                        val readerReady = tapToPayState is TapToPayState.ReaderConnected
-                        OutlinedButton(
-                            onClick = {
-                                selectedPaymentMethod = "tap"
-                                pendingDonation?.let { donation ->
-                                    handleDonation(
-                                        campaign = donation.campaign,
-                                        amount = donation.amount,
-                                        isRecurring = donation.isRecurring,
-                                        interval = donation.interval,
-                                        email = donation.email,
-                                        paymentViewModel = paymentViewModel,
-                                        kioskSession = kioskSession
-                                    )
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp),
-                            enabled = readerReady,
-                            border = BorderStroke(
-                                width = 2.dp,
-                                color = if (readerReady) MaterialTheme.colorScheme.primary
-                                       else MaterialTheme.colorScheme.outline
-                            )
-                        ) {
-                            Text(
-                                text = if (readerReady) "📱 Tap Card on Phone"
-                                       else "📱 Tap to Pay (Initializing...)",
-                                fontSize = 16.sp,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Cancel button
-                        androidx.compose.material3.TextButton(
-                            onClick = {
-                                pendingDonation = null
-                                selectedPaymentMethod = null
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Cancel", fontSize = 14.sp)
-                        }
                     }
                 }
             }
