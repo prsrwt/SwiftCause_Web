@@ -38,7 +38,38 @@ const createGiftAidDeclarationFromMetadata = async ({
   organizationId,
   donationDateIso,
 }) => {
-  if (!toBoolean(metadata.isGiftAid)) return;
+
+  // Strict Guard: Only process if isGiftAid is explicitly true
+  const isGiftAid = toBoolean(metadata.isGiftAid);
+  if (!isGiftAid) {
+    return; // Exit immediately - not a Gift Aid donation
+  }
+
+  // Consent Validation: Verify required consent fields are present
+  const giftAidConsent = toBoolean(metadata.giftAidConsent);
+  const ukTaxpayerConfirmation = toBoolean(metadata.giftAidTaxpayer);
+
+  if (!giftAidConsent || !ukTaxpayerConfirmation) {
+    console.warn('[Gift Aid Recurring] Skipping declaration: missing required consent', {
+      donationId,
+      campaignId: campaignId || 'unknown',
+      // Raw metadata values (for debugging string vs boolean issues)
+      raw: {
+        isGiftAid: metadata.isGiftAid,
+        giftAidConsent: metadata.giftAidConsent,
+        giftAidTaxpayer: metadata.giftAidTaxpayer,
+      },
+      // Parsed boolean values
+      parsed: {
+        isGiftAid,
+        giftAidConsent,
+        ukTaxpayerConfirmation,
+      },
+      // Validation failure reason
+      reason: !giftAidConsent ? 'missing_gift_aid_consent' : 'missing_uk_taxpayer_confirmation',
+    });
+    return; // Exit immediately - consent not provided
+  }
 
   const declarationId =
     toStringOrNull(metadata.giftAidDeclarationId) || toStringOrNull(metadata.declarationId);
