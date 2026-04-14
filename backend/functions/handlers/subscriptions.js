@@ -29,6 +29,27 @@ const getTaxYear = (dateValue) => {
   return `${startYear}-${endYearShort}`;
 };
 
+const writeGiftAidReconciliationIssue = async ({
+  paymentIntentId,
+  declarationId,
+  organizationId,
+  reason,
+  metadata,
+}) => {
+  await admin
+    .firestore()
+    .collection('giftAidReconciliationIssues')
+    .add({
+      paymentIntentId: paymentIntentId || null,
+      declarationId: declarationId || null,
+      organizationId: organizationId || null,
+      reason,
+      metadata: metadata || {},
+      resolved: false,
+      createdAt: admin.firestore.Timestamp.now(),
+    });
+};
+
 const createGiftAidDeclarationFromMetadata = async ({
   donationId,
   amountMinor,
@@ -38,7 +59,6 @@ const createGiftAidDeclarationFromMetadata = async ({
   organizationId,
   donationDateIso,
 }) => {
-
   // Strict Guard: Only process if isGiftAid is explicitly true
   const isGiftAid = toBoolean(metadata.isGiftAid);
   if (!isGiftAid) {
@@ -83,12 +103,26 @@ const createGiftAidDeclarationFromMetadata = async ({
     if (declarationSnap.exists) {
       const existingDonationId = toStringOrNull(declarationSnap.data()?.donationId);
       if (existingDonationId && existingDonationId !== donationId) {
-        console.warn(
-          'Gift Aid declaration already linked to a different donation; skipping relink:',
+        // Track conflict in reconciliation issues (matches one-time behavior)
+        await writeGiftAidReconciliationIssue({
+          paymentIntentId: donationId,
+          declarationId,
+          organizationId: organizationId || null,
+          reason: 'declaration_already_linked_to_other_donation',
+          metadata: {
+            existingDonationId,
+            incomingDonationId: donationId,
+            source: 'recurring_subscription',
+          },
+        });
+        console.error('[Gift Aid Recurring] Declaration already linked to different donation:', {
           declarationId,
           existingDonationId,
-          donationId,
-        );
+          incomingDonationId: donationId,
+          campaignId: campaignId || 'unknown',
+        });
+        // Note: We return instead of throw to avoid breaking subscription flow,
+        // but we DO track the issue for visibility (deliberate divergence from one-time path)
         return;
       }
 
