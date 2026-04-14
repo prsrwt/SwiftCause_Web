@@ -111,6 +111,12 @@ const exportCampaigns = (req, res) => {
       const auth = await verifyAuth(req);
       const organizationId =
         typeof req.body?.organizationId === 'string' ? req.body.organizationId.trim() : '';
+      const requestedCampaignIds = Array.isArray(req.body?.campaignIds)
+        ? req.body.campaignIds
+            .filter((value) => typeof value === 'string')
+            .map((value) => value.trim())
+            .filter((value) => Boolean(value))
+        : null;
       await ensureCampaignExportAccess(auth, organizationId);
 
       const snapshot = await admin
@@ -119,7 +125,24 @@ const exportCampaigns = (req, res) => {
         .where('organizationId', '==', organizationId)
         .get();
 
-      const campaigns = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+      const requestedCampaignIdSet = requestedCampaignIds ? new Set(requestedCampaignIds) : null;
+      const requestedCampaignIndex = requestedCampaignIds
+        ? new Map(requestedCampaignIds.map((id, index) => [id, index]))
+        : null;
+      const campaigns = snapshot.docs
+        .map((doc) => ({ ...doc.data(), id: doc.id }))
+        .filter((campaign) => {
+          if (!requestedCampaignIdSet) return true;
+          return requestedCampaignIdSet.has(campaign.id);
+        });
+
+      if (requestedCampaignIndex) {
+        campaigns.sort(
+          (a, b) =>
+            (requestedCampaignIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+            (requestedCampaignIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+        );
+      }
       const headers = campaigns.length > 0 ? Object.keys(campaigns[0]) : ['id'];
       const rows = campaigns.map((campaign) => headers.map((header) => campaign[header]));
       const csvContent = buildCsv(rows, headers);

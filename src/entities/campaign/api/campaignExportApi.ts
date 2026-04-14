@@ -3,6 +3,7 @@ import { FUNCTION_URLS } from '@/shared/config/functions';
 
 export interface CampaignExportRequest {
   organizationId: string;
+  campaignIds?: string[];
 }
 
 const getCurrentUserToken = async () => {
