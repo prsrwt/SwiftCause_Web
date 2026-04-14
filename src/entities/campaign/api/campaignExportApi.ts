@@ -4,6 +4,12 @@ import { FUNCTION_URLS } from '@/shared/config/functions';
 export interface CampaignExportRequest {
   organizationId: string;
   campaignIds?: string[];
+  filters?: {
+    searchTerm?: string;
+    status?: string;
+    category?: string;
+    dateRange?: 'all' | 'last30' | 'last90' | 'last365';
+  };
 }
 
 const getCurrentUserToken = async () => {
