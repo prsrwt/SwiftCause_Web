@@ -198,8 +198,32 @@ fun KioskMainContent(
                             )
                         }
                         "tap" -> {
-                            // Start Tap to Pay collection
-                            tapToPayViewModel.collectPayment(secret)
+                            if (tapToPayViewModel.isReaderReady()) {
+                                // Start Tap to Pay collection
+                                tapToPayViewModel.collectPayment(secret)
+                            } else {
+                                // Reader not ready anymore; fallback to card entry.
+                                selectedPaymentMethod = "card"
+                                Toast.makeText(
+                                    context,
+                                    "Tap to Pay unavailable. Switching to card entry.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                paymentSheet.presentWithPaymentIntent(
+                                    paymentIntentClientSecret = secret,
+                                    configuration = PaymentSheet.Configuration(
+                                        merchantDisplayName = "SwiftCause",
+                                        allowsDelayedPaymentMethods = false,
+                                        billingDetailsCollectionConfiguration = PaymentSheet.BillingDetailsCollectionConfiguration(
+                                            name = PaymentSheet.BillingDetailsCollectionConfiguration.CollectionMode.Never,
+                                            email = PaymentSheet.BillingDetailsCollectionConfiguration.CollectionMode.Never,
+                                            phone = PaymentSheet.BillingDetailsCollectionConfiguration.CollectionMode.Never,
+                                            address = PaymentSheet.BillingDetailsCollectionConfiguration.AddressCollectionMode.Never,
+                                            attachDefaultsToPaymentMethod = false
+                                        )
+                                    )
+                                )
+                            }
                         }
                     }
                 }
@@ -317,7 +341,8 @@ fun KioskMainContent(
                             email = email
                         )
 
-                        selectedPaymentMethod = if (hasNfcCapability) "tap" else "card"
+                        val canUseTapToPay = hasNfcCapability && tapToPayViewModel.isReaderReady()
+                        selectedPaymentMethod = if (canUseTapToPay) "tap" else "card"
                         handleDonation(
                             campaign = campaign,
                             amount = amount,
