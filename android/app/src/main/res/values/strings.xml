@@ -62,6 +62,6 @@
     <string name="payment_complete">Payment complete</string>
     <string name="generating_qr">Generating QR…</string>
     <string name="preparing_your_magic_link">Preparing your magic link</string>
-    <string name="ive_scanned_the_qr">I&apos;ve scanned the QR</string>
+    <string name="ive_scanned_the_qr">I\'ve scanned the QR</string>
     <string name="back_to_campaigns">Back to campaigns</string>
 </resources>
