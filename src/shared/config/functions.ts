@@ -20,6 +20,7 @@ export const FUNCTION_URLS = {
   exportGiftAidDeclarations: getFunctionUrl('exportGiftAidDeclarations'),
   downloadGiftAidExportBatchFile: getFunctionUrl('downloadGiftAidExportBatchFile'),
   exportDonations: getFunctionUrl('exportDonations'),
+  exportKiosks: getFunctionUrl('exportKiosks'),
   exportCampaigns: getFunctionUrl('exportCampaigns'),
   kioskLogin: getFunctionUrl('kioskLogin'),
   createUser: getFunctionUrl('createUser'),
