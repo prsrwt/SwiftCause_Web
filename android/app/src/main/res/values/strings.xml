@@ -52,7 +52,16 @@
     <string name="magic_link_expires">Link available for 2 minutes • Expires in 30 days after first use</string>
     <string name="magic_link_qr_unavailable">QR Code unavailable</string>
     <string name="returning_to_campaigns">Returning to campaigns in %1$d seconds…</string>
+    <string name="returning_to_campaigns_short">Returning to campaigns in %1$ds</string>
     <string name="thank_you_for_your_donation">Thank you for your donation!</string>
+    <string name="thank_you_for_your_donation_plain">Thank you for your donation</string>
     <string name="qr_code_content_description">QR code for Gift Aid declaration</string>
     <string name="scan_qr_for_gift_aid">Scan this QR code with your phone to complete your Gift Aid declaration.</string>
+    <string name="processing_your_payment">Processing your payment</string>
+    <string name="please_wait">Please wait…</string>
+    <string name="payment_complete">Payment complete</string>
+    <string name="generating_qr">Generating QR…</string>
+    <string name="preparing_your_magic_link">Preparing your magic link</string>
+    <string name="ive_scanned_the_qr">I&apos;ve scanned the QR</string>
+    <string name="back_to_campaigns">Back to campaigns</string>
 </resources>

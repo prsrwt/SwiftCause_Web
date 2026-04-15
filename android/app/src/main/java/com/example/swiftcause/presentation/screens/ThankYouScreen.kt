@@ -149,7 +149,7 @@ fun ThankYouScreen(
                         Spacer(modifier = Modifier.height(20.dp))
 
                         Text(
-                            text = "Processing your payment",
+                            text = stringResource(R.string.processing_your_payment),
                             color = PremiumHeadline,
                             fontSize = 26.sp,
                             lineHeight = 32.sp,
@@ -160,7 +160,7 @@ fun ThankYouScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "Please wait...",
+                            text = stringResource(R.string.please_wait),
                             color = PremiumBody,
                             fontSize = 16.sp
                         )
@@ -182,7 +182,7 @@ fun ThankYouScreen(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         Text(
-                            text = "Payment complete",
+                            text = stringResource(R.string.payment_complete),
                             color = PremiumHeadline,
                             fontSize = 34.sp,
                             lineHeight = 40.sp,
@@ -193,7 +193,7 @@ fun ThankYouScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "Thank you for your donation",
+                            text = stringResource(R.string.thank_you_for_your_donation_plain),
                             color = PremiumBody,
                             fontSize = 17.sp,
                             maxLines = 1,
@@ -236,7 +236,7 @@ fun ThankYouScreen(
                                     )
                                     Spacer(modifier = Modifier.height(14.dp))
                                     Text(
-                                        text = "Generating QR...",
+                                        text = stringResource(R.string.generating_qr),
                                         color = PremiumBody,
                                         fontSize = 14.sp,
                                         textAlign = TextAlign.Center
@@ -259,7 +259,11 @@ fun ThankYouScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Text(
-                            text = if (hasQr) "Returning to campaigns in ${secondsRemaining}s" else "Preparing your magic link",
+                            text = if (hasQr) {
+                                stringResource(R.string.returning_to_campaigns_short, secondsRemaining)
+                            } else {
+                                stringResource(R.string.preparing_your_magic_link)
+                            },
                             color = PremiumBody,
                             fontSize = 14.sp
                         )
@@ -284,7 +288,11 @@ fun ThankYouScreen(
                                 .widthIn(min = 220.dp)
                         ) {
                             Text(
-                                text = if (hasQr) "I've scanned the QR" else "Back to campaigns",
+                                text = if (hasQr) {
+                                    stringResource(R.string.ive_scanned_the_qr)
+                                } else {
+                                    stringResource(R.string.back_to_campaigns)
+                                },
                                 fontWeight = FontWeight.Bold
                             )
                         }
