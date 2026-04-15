@@ -5,7 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.swiftcause.data.repository.CampaignRepository
 import com.example.swiftcause.domain.models.Campaign
 import com.example.swiftcause.domain.models.KioskSession
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,8 +28,16 @@ class CampaignListViewModel(
     private val _uiState = MutableStateFlow(CampaignListUiState())
     val uiState: StateFlow<CampaignListUiState> = _uiState.asStateFlow()
 
+    private var pollingJob: Job? = null
+
     fun loadCampaigns(kioskSession: KioskSession) {
         viewModelScope.launch {
+            loadCampaignsSequential(kioskSession)
+        }
+    }
+
+    private suspend fun loadCampaignsSequential(kioskSession: KioskSession) {
+        try {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
             // Fetch organization currency once at the start
@@ -60,6 +71,13 @@ class CampaignListViewModel(
                     )
                 }
             )
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (exception: Exception) {
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                error = exception.message ?: "Failed to load campaigns"
+            )
         }
     }
 
@@ -72,12 +90,18 @@ class CampaignListViewModel(
     }
 
     fun startPolling(kioskSession: KioskSession, interval: Long = 60000L) {
-        viewModelScope.launch {
-            while (true) {
-                loadCampaigns(kioskSession)
+        pollingJob?.cancel()
+        pollingJob = viewModelScope.launch {
+            while (isActive) {
+                loadCampaignsSequential(kioskSession)
                 delay(interval)
             }
         }
+    }
+
+    fun stopPolling() {
+        pollingJob?.cancel()
+        pollingJob = null
     }
 
     fun refreshCampaign(campaignId: String) {
@@ -102,5 +126,10 @@ class CampaignListViewModel(
 
     fun retry(kioskSession: KioskSession) {
         loadCampaigns(kioskSession)
+    }
+
+    override fun onCleared() {
+        stopPolling()
+        super.onCleared()
     }
 }
