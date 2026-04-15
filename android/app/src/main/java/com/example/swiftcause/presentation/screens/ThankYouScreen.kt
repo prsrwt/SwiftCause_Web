@@ -52,13 +52,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.swiftcause.BuildConfig
 import com.example.swiftcause.R
+import com.example.swiftcause.ThankYouData
 import com.example.swiftcause.ui.theme.PremiumBorder
 import com.example.swiftcause.ui.theme.PremiumBody
 import com.example.swiftcause.ui.theme.PremiumCardSurface
 import com.example.swiftcause.ui.theme.PremiumHeadline
 import com.example.swiftcause.ui.theme.PremiumPageBackground
 import com.example.swiftcause.ui.theme.PremiumPrimary
-import com.example.swiftcause.ui.theme.PremiumPrimaryPressed
+import com.example.swiftcause.utils.CurrencyFormatter
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
@@ -74,6 +75,7 @@ private enum class ThankYouPhase {
 
 @Composable
 fun ThankYouScreen(
+    thankYouData: ThankYouData,
     magicLinkToken: String?,
     onDismiss: () -> Unit
 ) {
@@ -81,6 +83,12 @@ fun ThankYouScreen(
     val totalSeconds = (DISMISS_DELAY_WITH_QR / 1000).toInt()
     var secondsRemaining by remember { mutableIntStateOf(totalSeconds) }
     val hasQr = !magicLinkToken.isNullOrBlank()
+    val formattedAmount = remember(thankYouData.amount, thankYouData.currency) {
+        CurrencyFormatter.formatCurrency(thankYouData.amount, thankYouData.currency)
+    }
+    val shortPaymentReference = remember(thankYouData.paymentIntentId) {
+        thankYouData.paymentIntentId.takeLast(12)
+    }
 
     val progress by animateFloatAsState(
         targetValue = if (hasQr) secondsRemaining.toFloat() / totalSeconds.toFloat() else 1f,
@@ -196,8 +204,31 @@ fun ThankYouScreen(
                             text = stringResource(R.string.thank_you_for_your_donation_plain),
                             color = PremiumBody,
                             fontSize = 17.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = stringResource(
+                                R.string.donation_successful,
+                                formattedAmount,
+                                thankYouData.campaignTitle
+                            ),
+                            color = PremiumBody,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.widthIn(max = 520.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = stringResource(R.string.payment_reference, shortPaymentReference),
+                            color = PremiumBody.copy(alpha = 0.8f),
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center
                         )
 
                         Spacer(modifier = Modifier.height(18.dp))

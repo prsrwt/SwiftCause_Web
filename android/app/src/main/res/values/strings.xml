@@ -60,6 +60,7 @@
     <string name="processing_your_payment">Processing your payment</string>
     <string name="please_wait">Please wait…</string>
     <string name="payment_complete">Payment complete</string>
+    <string name="payment_reference">Reference: %1$s</string>
     <string name="generating_qr">Generating QR…</string>
     <string name="preparing_your_magic_link">Preparing your magic link</string>
     <string name="ive_scanned_the_qr">I\'ve scanned the QR</string>

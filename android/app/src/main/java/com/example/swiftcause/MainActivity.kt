@@ -554,10 +554,12 @@ fun KioskMainContent(
         }
 
         // Thank You Screen overlay (shown after successful payment)
-        if (showThankYouScreen && thankYouData != null) {
+        val currentThankYouData = thankYouData
+        if (showThankYouScreen && currentThankYouData != null) {
             val magicLinkToken by paymentViewModel.magicLinkToken.collectAsState()
 
             ThankYouScreen(
+                thankYouData = currentThankYouData,
                 magicLinkToken = magicLinkToken,
                 onDismiss = {
                     showThankYouScreen = false
