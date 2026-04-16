@@ -48,6 +48,12 @@ const { createConnectionToken } = require('./handlers/terminal');
 
 // Crypto for token hashing
 const crypto = require('crypto');
+const {
+  GIFT_AID_DECLARATION_TEXT_VERSION,
+  GIFT_AID_DECLARATION_STATUS,
+  GIFT_AID_HMRC_CLAIM_STATUS,
+  GIFT_AID_OPERATIONAL_STATUS,
+} = require('./shared/giftAidContract');
 
 // CORS Configuration - restrict to your domains
 // Must match domains used in payments.js to prevent CORS errors
@@ -537,6 +543,24 @@ exports.consumeMagicLinkToken = functions.https.onRequest(async (req, res) => {
 
 const PROCESSING_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 
+// Shared helper for UK tax year calculation
+// Note: Uses April 1 cutoff as a simplification (actual UK tax year starts April 6)
+// This matches the existing implementation in webhooks.js and subscriptions.js
+// TODO: Consider implementing proper April 6 boundary check across all handlers
+const getTaxYear = (dateValue) => {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return 'unknown';
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const startYear = month >= 3 ? year : year - 1;
+  const endYearShort = String((startYear + 1) % 100).padStart(2, '0');
+  return `${startYear}-${endYearShort}`;
+};
+
+// HMRC-compliant Gift Aid declaration text
+const GIFT_AID_DECLARATION_TEXT =
+  'I want to Gift Aid my donation and any donations I make in the future or have made in the past 4 years to this charity. I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any difference.';
+
 /**
  * Complete Gift Aid Flow - Atomic & Idempotent
  *
@@ -741,7 +765,9 @@ exports.completeGiftAidFlow = functions.https.onRequest(async (req, res) => {
 
       if (donationData.giftAidDeclarationId && donationData.isGiftAid === true) {
         // Already processed - return success (idempotent)
-        const giftAidAmount = Math.round(donationData.amount * 0.25);
+        // Use token amount as source of truth (defensive against missing donation.amount)
+        const amount = tokenData.amount || 0;
+        const giftAidAmount = Math.round(amount * 0.25);
 
         return {
           success: true,
@@ -749,7 +775,7 @@ exports.completeGiftAidFlow = functions.https.onRequest(async (req, res) => {
           declarationId: donationData.giftAidDeclarationId,
           donationId: donationId,
           giftAidAmount: giftAidAmount,
-          totalImpact: donationData.amount + giftAidAmount,
+          totalImpact: amount + giftAidAmount,
         };
       }
 
@@ -769,17 +795,20 @@ exports.completeGiftAidFlow = functions.https.onRequest(async (req, res) => {
       const declarationRef = db.collection('giftAidDeclarations').doc();
       const declarationId = declarationRef.id;
 
+      // Validate amount exists (defensive)
+      if (!tokenData.amount || typeof tokenData.amount !== 'number' || tokenData.amount <= 0) {
+        throw {
+          status: 400,
+          error: 'INVALID_DONATION_AMOUNT',
+          message: 'Invalid donation amount in token',
+        };
+      }
+
       const giftAidAmount = Math.round(tokenData.amount * 0.25);
       const totalImpact = tokenData.amount + giftAidAmount;
 
       const donorEmail = formData.donorEmail?.trim() || null;
       const donorEmailNormalized = donorEmail?.toLowerCase() || null;
-
-      const getTaxYear = (date) => {
-        const year = date.getFullYear();
-        const month = date.getMonth();
-        return month >= 3 ? `${year}-${(year + 1) % 100}` : `${year - 1}-${year % 100}`;
-      };
 
       const declarationData = {
         id: declarationId,
@@ -794,9 +823,8 @@ exports.completeGiftAidFlow = functions.https.onRequest(async (req, res) => {
         donorPostcode: formData.postcode.trim(),
         donorEmail: donorEmail,
         donorEmailNormalized: donorEmailNormalized,
-        declarationText:
-          'I want to Gift Aid my donation and any donations I make in the future or have made in the past 4 years to this charity. I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any difference.',
-        declarationTextVersion: 'v1.0',
+        declarationText: GIFT_AID_DECLARATION_TEXT,
+        declarationTextVersion: GIFT_AID_DECLARATION_TEXT_VERSION,
         declarationDate: timestamp,
         giftAidConsent: consents.giftAidConsent,
         ukTaxpayerConfirmation: consents.ukTaxpayerConfirmation,
@@ -808,10 +836,10 @@ exports.completeGiftAidFlow = functions.https.onRequest(async (req, res) => {
         campaignTitle: donationData.metadata?.campaignTitleSnapshot || 'Donation',
         organizationId: tokenData.charityId || donationData.organizationId || null,
         donationDate: donationData.createdAt || timestamp,
-        taxYear: getTaxYear(new Date()),
-        giftAidStatus: 'active',
-        hmrcClaimStatus: 'pending',
-        operationalStatus: 'captured',
+        taxYear: getTaxYear(donationData.createdAt || timestamp),
+        giftAidStatus: GIFT_AID_DECLARATION_STATUS.ACTIVE,
+        hmrcClaimStatus: GIFT_AID_HMRC_CLAIM_STATUS.PENDING,
+        operationalStatus: GIFT_AID_OPERATIONAL_STATUS.CAPTURED,
         captureMethod: 'magic_link',
         magicLinkTokenId: tokenHash,
         createdAt: timestamp,
