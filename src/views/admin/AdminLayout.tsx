@@ -42,6 +42,7 @@ import {
   KeyRound,
   Eye,
   EyeOff,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { auth, db } from '../../shared/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -58,6 +59,7 @@ const SCREEN_LABELS: Partial<Record<Screen, string>> = {
   'admin-gift-aid': 'Gift Aid Donations',
   'admin-users': 'Users',
   'admin-bank-details': 'Bank Details',
+  'admin-organization-settings': 'Organization Settings',
   'admin-stripe-account': 'Stripe account',
 } as Partial<Record<Screen, string>>;
 
@@ -162,6 +164,11 @@ function AdminSidebar({
 }) {
   const { state, isMobile } = useSidebar();
   const roleDisplayName = getRoleDisplayName(userSession.user.role);
+  const canManageOrgSettings =
+    userSession.user.role === 'admin' ||
+    userSession.user.role === 'super_admin' ||
+    hasPermission('manage_permissions') ||
+    hasPermission('system_admin');
 
   // On mobile, always show expanded sidebar (with text)
   // On desktop, respect the collapsed state
@@ -498,6 +505,35 @@ function AdminSidebar({
                 {!isCollapsed && <span className="ml-3 text-base font-medium">Bank Details</span>}
               </SidebarMenuButton>
             </SidebarMenuItem>
+
+            {/* Organization Settings */}
+            {canManageOrgSettings ? (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => onNavigate('admin-organization-settings')}
+                  className={`relative w-full flex items-center ${isCollapsed ? 'justify-center px-4 py-4' : 'px-4 py-3.5'} rounded-xl text-left transition-all duration-200 group ${
+                    isActive('admin-organization-settings')
+                      ? 'bg-[#0f5132] text-white font-medium shadow-lg'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                  }`}
+                  title={isCollapsed ? 'Organization Settings' : ''}
+                  aria-current={isActive('admin-organization-settings') ? 'page' : undefined}
+                >
+                  {isActive('admin-organization-settings') && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white/30 rounded-r-full"></div>
+                  )}
+                  <SlidersHorizontal
+                    className={`${isCollapsed ? 'h-6 w-6' : 'h-5 w-5'} shrink-0 ${
+                      isActive('admin-organization-settings') ? 'text-white' : ''
+                    }`}
+                    strokeWidth={1.5}
+                  />
+                  {!isCollapsed && (
+                    <span className="ml-3 text-base font-medium">Organization Settings</span>
+                  )}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ) : null}
 
             {/* Stripe account */}
             <SidebarMenuItem>
