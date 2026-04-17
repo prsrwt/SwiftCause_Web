@@ -102,6 +102,7 @@ export default function CampaignPage({ params }: { params: Promise<{ campaignId:
     // Magic link will be generated based on campaign.configuration.giftAidEnabled
     const donation = {
       campaignId: _campaign.id,
+      organizationId: _campaign.organizationId,
       amount: amountPence,
       isGiftAid: false, // Donor hasn't opted in yet
       giftAidAccepted: false,
@@ -184,6 +185,7 @@ export default function CampaignPage({ params }: { params: Promise<{ campaignId:
       // Regular flow: Continue to payment
       const donation = {
         campaignId: campaign.id,
+        organizationId: campaign.organizationId,
         amount: details.donationAmount,
         isGiftAid: true,
         giftAidAccepted: true,
@@ -234,6 +236,7 @@ export default function CampaignPage({ params }: { params: Promise<{ campaignId:
       const amountPence = Math.round((initialAmount || 0) * 100);
       const donation = {
         campaignId: campaign.id,
+        organizationId: campaign.organizationId,
         amount: amountPence,
         isGiftAid: false,
         giftAidAccepted: false, // Explicitly set to false when disabled
