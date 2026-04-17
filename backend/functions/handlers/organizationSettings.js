@@ -5,6 +5,8 @@ const { verifyAuth } = require('../middleware/auth');
 const DISPLAY_NAME_MAX_LENGTH = 40;
 const THANK_YOU_MESSAGE_MAX_LENGTH = 140;
 const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
+const LOGO_STORAGE_PATH_REGEX = /^organizations\/([^/]+)\/settings\/logo\//;
+const IDLE_IMAGE_STORAGE_PATH_REGEX = /^organizations\/([^/]+)\/settings\/idleImage\//;
 
 const getCallerProfile = async (uid) => {
   const callerDoc = await admin.firestore().collection('users').doc(uid).get();
@@ -141,6 +143,51 @@ const validateAndNormalizeSettingsPayload = (body) => {
   };
 };
 
+const extractStoragePathFromUrl = (url) => {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    if (url.startsWith('gs://')) {
+      const withoutPrefix = url.replace(/^gs:\/\/[^/]+\//, '');
+      return withoutPrefix || null;
+    }
+
+    const parsedUrl = new URL(url);
+    const objectPathParam = parsedUrl.searchParams.get('name');
+    if (objectPathParam) {
+      return decodeURIComponent(objectPathParam);
+    }
+
+    const marker = '/o/';
+    const markerIndex = parsedUrl.pathname.indexOf(marker);
+    if (markerIndex === -1) {
+      return null;
+    }
+
+    const encodedPath = parsedUrl.pathname.slice(markerIndex + marker.length);
+    return encodedPath ? decodeURIComponent(encodedPath) : null;
+  } catch {
+    return null;
+  }
+};
+
+const assertAssetBelongsToOrganization = (url, organizationId, pathRegex, fieldName) => {
+  if (!url) {
+    return;
+  }
+
+  const storagePath = extractStoragePathFromUrl(url);
+  const match = storagePath ? storagePath.match(pathRegex) : null;
+
+  if (!match || match[1] !== organizationId) {
+    const error = new Error(`${fieldName} must reference an uploaded asset for this organization`);
+    error.code = 400;
+    throw error;
+  }
+};
+
 const updateOrganizationSettings = (req, res) => {
   cors(req, res, async () => {
     try {
@@ -150,6 +197,18 @@ const updateOrganizationSettings = (req, res) => {
 
       const auth = await verifyAuth(req);
       const { organizationId, settings } = validateAndNormalizeSettingsPayload(req.body);
+      assertAssetBelongsToOrganization(
+        settings.logoUrl,
+        organizationId,
+        LOGO_STORAGE_PATH_REGEX,
+        'logoUrl',
+      );
+      assertAssetBelongsToOrganization(
+        settings.idleImageUrl,
+        organizationId,
+        IDLE_IMAGE_STORAGE_PATH_REGEX,
+        'idleImageUrl',
+      );
       const callerData = await getCallerProfile(auth.uid);
 
       if (!hasOrgSettingsWriteAccess(callerData)) {
