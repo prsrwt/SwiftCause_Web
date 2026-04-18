@@ -174,12 +174,13 @@ service cloud.firestore {
       // Only privileged admins can create/delete organization records
       allow create, delete: if isPrivilegedAdmin();
 
-      // Organization admins can only update settings/tags for their own org.
+      // Organization admins can only update tags for their own org.
+      // Settings writes must go through backend functions (Admin SDK bypasses rules).
       // Privileged admins can update any field.
       allow update: if isPrivilegedAdmin() ||
                       (
                         isOrganizationSettingsAdmin(orgId) &&
-                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['settings', 'tags'])
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tags'])
                       );
     }
     
