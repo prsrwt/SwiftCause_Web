@@ -60,14 +60,6 @@ const parseNumberOrNull = (value) => {
   return parsed;
 };
 
-const normalizeDisplayName = (value) => {
-  if (typeof value !== 'string') {
-    return '';
-  }
-
-  return value.trim().toLowerCase().replace(/\s+/g, ' ');
-};
-
 const resolveOrganizationDisplayName = (organizationData) => {
   if (!organizationData || typeof organizationData !== 'object') {
     return '';
@@ -94,43 +86,6 @@ const resolveOrganizationDisplayName = (organizationData) => {
   }
 
   return '';
-};
-
-const ensureDisplayNameAvailable = async (
-  organizationId,
-  nextDisplayName,
-  currentOrganizationData,
-) => {
-  const nextNormalizedName = normalizeDisplayName(nextDisplayName);
-  if (!nextNormalizedName) {
-    return;
-  }
-
-  const currentNormalizedName = normalizeDisplayName(
-    resolveOrganizationDisplayName(currentOrganizationData),
-  );
-  if (nextNormalizedName === currentNormalizedName) {
-    return;
-  }
-
-  const organizationsSnapshot = await admin.firestore().collection('organizations').get();
-  const hasConflict = organizationsSnapshot.docs.some((organizationDoc) => {
-    if (organizationDoc.id === organizationId) {
-      return false;
-    }
-
-    const candidateDisplayName = resolveOrganizationDisplayName(organizationDoc.data() || {});
-    const candidateNormalizedName = normalizeDisplayName(candidateDisplayName);
-    return candidateNormalizedName && candidateNormalizedName === nextNormalizedName;
-  });
-
-  if (hasConflict) {
-    const error = new Error(
-      'Organization display name already exists. Please choose a different name.',
-    );
-    error.code = 409;
-    throw error;
-  }
 };
 
 const validateAndNormalizeSettingsPayload = (body) => {
@@ -445,12 +400,6 @@ const updateOrganizationSettings = (req, res) => {
           error: 'You do not have permission to change organization branding',
         });
       }
-
-      await ensureDisplayNameAvailable(
-        organizationId,
-        settings.displayName,
-        currentOrganizationData,
-      );
 
       const updatedAt = new Date().toISOString();
       await orgRef.set(

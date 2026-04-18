@@ -91,7 +91,7 @@ describe('updateOrganizationSettings', () => {
     process.env.GCLOUD_PROJECT = 'swiftcause-app';
   });
 
-  it('rejects duplicate display names across organizations', async () => {
+  it('allows duplicate display names across organizations', async () => {
     await seedOrganization('org-1', {
       settings: {
         displayName: 'Org One',
@@ -127,9 +127,13 @@ describe('updateOrganizationSettings', () => {
     });
     const res = await invokeHandler(req);
 
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({
-      error: expect.stringContaining('display name already exists'),
+      success: true,
+      organizationId: 'org-1',
+      settings: expect.objectContaining({
+        displayName: 'Taken Name',
+      }),
     });
   });
 
