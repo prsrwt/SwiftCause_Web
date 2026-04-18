@@ -54,6 +54,16 @@ jobs:
             exit 1
           fi
 
+      - name: Install Functions dependencies
+        id: functions_install
+        run: npm ci --prefix backend/functions
+        continue-on-error: true
+
+      - name: Run Functions tests
+        id: functions_tests
+        run: npm run test:functions
+        continue-on-error: true
+
       - name: Calculate Code Statistics
         id: stats
         run: |
@@ -81,6 +91,7 @@ jobs:
             const lintOutcome = '${{ steps.lint.outcome }}';
             const buildOutcome = '${{ steps.build.outcome }}';
             const coverageOutcome = '${{ steps.coverage.outcome }}';
+            const functionsTestsOutcome = '${{ steps.functions_tests.outcome }}';
 
             const files = '${{ steps.stats.outputs.files }}';
             const loc = '${{ steps.stats.outputs.loc }}';
@@ -95,7 +106,8 @@ jobs:
             const allPassed = typecheckOutcome === 'success' &&
                              lintOutcome === 'success' &&
                              buildOutcome === 'success' &&
-                             coverageOutcome === 'success';
+                             coverageOutcome === 'success' &&
+                             functionsTestsOutcome === 'success';
 
             const comment = `## 📊 Code Quality Report
 
@@ -109,6 +121,7 @@ jobs:
             | **Linter** | ${getStatus(lintOutcome)} | Code style and best practices |
             | **Build** | ${getStatus(buildOutcome)} | Production build verification |
             | **Coverage** | ${getStatus(coverageOutcome)} | Test coverage analysis |
+            | **Functions Tests** | ${getStatus(functionsTestsOutcome)} | Backend functions Jest test suite |
 
             ### Code Statistics
 

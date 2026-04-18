@@ -16,6 +16,7 @@
     "test": "vitest",
     "test:run": "vitest run --coverage",
     "test:coverage": "vitest run --coverage",
+    "test:functions": "npm --prefix backend/functions test",
     "test:watch": "vitest",
     "emulator": "cd backend && firebase emulators:start",
     "deploy:functions": "cd backend && firebase deploy --only functions",
