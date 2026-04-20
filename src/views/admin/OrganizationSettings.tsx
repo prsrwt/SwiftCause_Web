@@ -102,12 +102,27 @@ export function OrganizationSettings({
 
   const logoInputRef = useRef<HTMLInputElement | null>(null);
   const idleImageInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingOppositeSectionDraftRef = useRef<{
+    identity?: {
+      displayName: string;
+      thankYouMessage: string;
+    };
+    branding?: {
+      accentColorHex: string;
+      logoUrl: string | null;
+      idleImageUrl: string | null;
+      pendingLogo: OrganizationSettingsUploadResult | null;
+      pendingIdleImage: OrganizationSettingsUploadResult | null;
+      logoDimensions: { width: number; height: number } | null;
+    };
+  } | null>(null);
 
   useEffect(() => {
     if (!organization) {
       return;
     }
 
+    const draftToRestore = pendingOppositeSectionDraftRef.current;
     setDisplayName(organization.settings?.displayName || organization.name || '');
     setAccentColorHex(organization.settings?.accentColorHex || ACCENT_COLOR_FALLBACK);
     setThankYouMessage(organization.settings?.thankYouMessage || '');
@@ -115,6 +130,23 @@ export function OrganizationSettings({
     setIdleImageUrl(organization.settings?.idleImageUrl || null);
     setPendingLogo(null);
     setPendingIdleImage(null);
+    setLogoDimensions(null);
+
+    if (draftToRestore?.identity) {
+      setDisplayName(draftToRestore.identity.displayName);
+      setThankYouMessage(draftToRestore.identity.thankYouMessage);
+    }
+
+    if (draftToRestore?.branding) {
+      setAccentColorHex(draftToRestore.branding.accentColorHex);
+      setLogoUrl(draftToRestore.branding.logoUrl);
+      setIdleImageUrl(draftToRestore.branding.idleImageUrl);
+      setPendingLogo(draftToRestore.branding.pendingLogo);
+      setPendingIdleImage(draftToRestore.branding.pendingIdleImage);
+      setLogoDimensions(draftToRestore.branding.logoDimensions);
+    }
+
+    pendingOppositeSectionDraftRef.current = null;
   }, [organization]);
 
   useEffect(() => {
@@ -325,6 +357,28 @@ export function OrganizationSettings({
 
     setSavingSection(section);
     try {
+      const draftToPreserve =
+        section === 'identity' && hasBrandingChanges
+          ? {
+              branding: {
+                accentColorHex,
+                logoUrl,
+                idleImageUrl,
+                pendingLogo,
+                pendingIdleImage,
+                logoDimensions,
+              },
+            }
+          : section === 'branding' && hasIdentityChanges
+            ? {
+                identity: {
+                  displayName,
+                  thankYouMessage,
+                },
+              }
+            : null;
+      pendingOppositeSectionDraftRef.current = draftToPreserve;
+
       const persistedDisplayName = (
         currentOrganization.settings?.displayName ||
         currentOrganization.name ||
@@ -353,8 +407,10 @@ export function OrganizationSettings({
         logoDimensions: resolvedLogoDimensions,
       });
 
-      setPendingLogo(null);
-      setPendingIdleImage(null);
+      if (section === 'branding') {
+        setPendingLogo(null);
+        setPendingIdleImage(null);
+      }
       onOrganizationSwitch?.(organizationId, trimmedDisplayName);
       showToast(
         section === 'identity'
@@ -363,6 +419,7 @@ export function OrganizationSettings({
         'success',
       );
     } catch (saveError) {
+      pendingOppositeSectionDraftRef.current = null;
       const message =
         saveError instanceof Error ? saveError.message : 'Failed to update organization settings.';
       showToast(message, 'error');
