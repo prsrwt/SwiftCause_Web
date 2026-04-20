@@ -9,29 +9,24 @@ export default function CampaignsPage() {
   const router = useRouter();
   const { currentKioskSession, handleLogout, refreshCurrentKioskSession } = useAuth();
 
-  // Predefined amount click - check giftAidEnabled before routing
+  // Predefined amount click - use new magic link flow for all campaigns
   const handleSelectCampaign = (campaign: Campaign, amount?: number) => {
     if (amount) {
-      // Check if Gift Aid is enabled for this campaign
-      if (campaign.configuration.giftAidEnabled) {
-        // Predefined amount selected - go to gift aid with selected amount
-        router.push(`/campaign/${campaign.id}?amount=${amount}&giftaid=true`);
-      } else {
-        // Gift Aid disabled - go directly to payment
-        const amountPence = Math.round(amount * 100);
-        const donation = {
-          campaignId: campaign.id,
-          amount: amountPence,
-          isGiftAid: false,
-          giftAidAccepted: false, // Explicitly set to false when disabled
-          isRecurring: false,
-          kioskId: currentKioskSession?.kioskId,
-          donorName: '',
-        };
-        sessionStorage.setItem('donation', JSON.stringify(donation));
-        sessionStorage.setItem('paymentBackPath', '/campaigns');
-        router.push(`/payment/${campaign.id}`);
-      }
+      // For predefined amounts, go directly to payment with new magic link flow
+      const amountPence = Math.round(amount * 100);
+      const donation = {
+        campaignId: campaign.id,
+        amount: amountPence,
+        isGiftAid: false, // Donor hasn't opted in yet
+        giftAidAccepted: false,
+        giftAidEnabled: campaign.configuration.giftAidEnabled, // Campaign supports Gift Aid
+        isRecurring: false,
+        kioskId: currentKioskSession?.kioskId,
+        donorName: 'Anonymous',
+      };
+      sessionStorage.setItem('donation', JSON.stringify(donation));
+      sessionStorage.setItem('paymentBackPath', '/campaigns');
+      router.push(`/payment/${campaign.id}`);
     } else {
       // No amount (donate button) - go to details page
       router.push(`/campaign/${campaign.id}`);
