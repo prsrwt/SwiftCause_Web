@@ -4,7 +4,7 @@ const cors = require('../middleware/cors');
 const { createSubscriptionDoc } = require('../entities/subscription');
 const { createDonationDoc } = require('../entities/donation');
 const DEFAULT_GIFT_AID_DECLARATION_TEXT =
-  'I confirm I have paid enough UK Income or Capital Gains Tax to cover all my Gift Aid donations in this tax year.';
+  'I want to Gift Aid my donation and any donations I make in the future or have made in the past four years to this charity. I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any difference.';
 
 const toBoolean = (value) => value === true || value === 'true' || value === '1';
 

@@ -559,7 +559,7 @@ const getTaxYear = (dateValue) => {
 
 // HMRC-compliant Gift Aid declaration text
 const GIFT_AID_DECLARATION_TEXT =
-  'I want to Gift Aid my donation and any donations I make in the future or have made in the past 4 years to this charity. I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any difference.';
+  'I want to Gift Aid my donation and any donations I make in the future or have made in the past four years to this charity. I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any difference.';
 
 /**
  * Complete Gift Aid Flow - Atomic & Idempotent

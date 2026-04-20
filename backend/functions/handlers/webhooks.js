@@ -17,7 +17,7 @@ const {
 } = require('../shared/giftAidContract');
 
 const DEFAULT_GIFT_AID_DECLARATION_TEXT =
-  'I confirm I have paid enough UK Income or Capital Gains Tax to cover all my Gift Aid donations in this tax year.';
+  'I want to Gift Aid my donation and any donations I make in the future or have made in the past four years to this charity. I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any difference.';
 
 const toBoolean = (value) => value === true || value === 'true' || value === '1';
 
@@ -499,7 +499,7 @@ const handlePaymentCompletedStripeWebhook = async (req, res) => {
         },
       });
 
-      // Create Gift Aid declaration if needed
+      // Create Gift Aid declaration if needed (old flow: isGiftAid=true in metadata)
       await createGiftAidDeclarationIfNeeded({
         paymentIntent,
         metadata,
@@ -507,6 +507,143 @@ const handlePaymentCompletedStripeWebhook = async (req, res) => {
         campaignTitleSnapshot,
         organizationId,
       });
+
+      // Link pre-created Gift Aid declaration to donation (declaration-first flow)
+      // In this flow the frontend creates the declaration BEFORE payment (donationId: '').
+      // The declarationId is passed in metadata under either key used by old/new clients.
+      // Fix #1: support both metadata key names (giftAidDeclarationId and declarationId)
+      const preCreatedDeclarationId =
+        toStringOrNull(metadata.giftAidDeclarationId) || toStringOrNull(metadata.declarationId);
+
+      if (preCreatedDeclarationId) {
+        try {
+          const db = admin.firestore();
+          const declarationRef = db.collection('giftAidDeclarations').doc(preCreatedDeclarationId);
+          const declarationSnap = await withRetries(
+            () => declarationRef.get(),
+            'preCreated declaration lookup',
+          );
+
+          if (declarationSnap.exists) {
+            const declarationData = declarationSnap.data() || {};
+
+            // Fix #2: guard against re-homing a declaration already linked to a different donation
+            const existingDonationId = toStringOrNull(declarationData.donationId);
+            if (existingDonationId && existingDonationId !== paymentIntent.id) {
+              await writeGiftAidReconciliationIssue({
+                paymentIntentId: paymentIntent.id,
+                declarationId: preCreatedDeclarationId,
+                organizationId: organizationId || null,
+                reason: 'pre_created_declaration_already_linked_to_other_donation',
+                metadata: {
+                  existingDonationId,
+                  incomingDonationId: paymentIntent.id,
+                },
+              });
+              console.warn(
+                '⚠️ [Gift Aid] Pre-created declaration already linked to a different donation — skipping',
+                {
+                  declarationId: preCreatedDeclarationId,
+                  existingDonationId,
+                  incomingDonationId: paymentIntent.id,
+                },
+              );
+            } else {
+              // Safe to link — declaration is either unlinked (donationId: '') or idempotent re-link
+              const donorFirstName = toStringOrNull(declarationData.donorFirstName) || '';
+              const donorSurname = toStringOrNull(declarationData.donorSurname) || '';
+              const donorNameFromDeclaration =
+                donorFirstName || donorSurname ? `${donorFirstName} ${donorSurname}`.trim() : null;
+
+              const now = new Date().toISOString();
+              const resolvedOrgId =
+                toStringOrNull(organizationId) ||
+                toStringOrNull(declarationData.organizationId) ||
+                null;
+
+              const donationRef = db.collection('donations').doc(paymentIntent.id);
+
+              // Update donation: mark as Gift Aid, set donor name, link declaration
+              await withRetries(
+                () =>
+                  donationRef.set(
+                    {
+                      isGiftAid: true,
+                      giftAidDeclarationId: preCreatedDeclarationId,
+                      ...(donorNameFromDeclaration ? { donorName: donorNameFromDeclaration } : {}),
+                      updatedAt: admin.firestore.Timestamp.now(),
+                    },
+                    { merge: true },
+                  ),
+                'donation gift-aid linkage update',
+              );
+
+              // Fix #3: promote declaration out of pre-payment state and set all required fields
+              // (mirrors what createGiftAidDeclarationIfNeeded does for the old flow)
+              await withRetries(
+                () =>
+                  declarationRef.set(
+                    {
+                      donationId: paymentIntent.id,
+                      donationAmount: paymentIntent.amount,
+                      giftAidAmount: Math.round(paymentIntent.amount * 0.25),
+                      campaignId: resolvedCampaignId || declarationData.campaignId || null,
+                      // Prefer a real title from Stripe metadata/Firestore campaign lookup.
+                      // Fall back to the declaration's own title before using the placeholder,
+                      // so a failed campaign lookup never clobbers a valid pre-created title.
+                      campaignTitle:
+                        (campaignTitleSnapshot !== 'Deleted Campaign'
+                          ? campaignTitleSnapshot
+                          : null) ||
+                        declarationData.campaignTitle ||
+                        campaignTitleSnapshot ||
+                        'Deleted Campaign',
+                      organizationId: resolvedOrgId,
+                      giftAidStatus: GIFT_AID_DECLARATION_STATUS.ACTIVE,
+                      hmrcClaimStatus: GIFT_AID_HMRC_CLAIM_STATUS.PENDING,
+                      operationalStatus: GIFT_AID_OPERATIONAL_STATUS.CAPTURED,
+                      donorEmail:
+                        toStringOrNull(metadata.donorEmail) || declarationData.donorEmail || null,
+                      donorEmailNormalized:
+                        normalizeEmail(metadata.donorEmail) ||
+                        toStringOrNull(declarationData.donorEmailNormalized) ||
+                        null,
+                      updatedAt: now,
+                    },
+                    { merge: true },
+                  ),
+                'preCreated declaration linkage update',
+              );
+
+              console.log('✅ [Gift Aid] Pre-created declaration linked to donation', {
+                donationId: paymentIntent.id,
+                declarationId: preCreatedDeclarationId,
+                donorName: donorNameFromDeclaration,
+              });
+            }
+          } else {
+            // Declaration ID was in metadata but doc doesn't exist — log a reconciliation issue
+            await writeGiftAidReconciliationIssue({
+              paymentIntentId: paymentIntent.id,
+              declarationId: preCreatedDeclarationId,
+              organizationId: organizationId || null,
+              reason: 'pre_created_declaration_id_not_found',
+              metadata: { campaignId: resolvedCampaignId || null },
+            });
+            console.warn('⚠️ [Gift Aid] Pre-created declaration not found in Firestore', {
+              declarationId: preCreatedDeclarationId,
+              donationId: paymentIntent.id,
+            });
+          }
+        } catch (linkError) {
+          // Non-critical — don't fail the webhook
+          console.error('❌ [Gift Aid] Failed to link pre-created declaration (non-critical)', {
+            declarationId: preCreatedDeclarationId,
+            donationId: paymentIntent.id,
+            error: linkError.message,
+          });
+        }
+      }
 
       // Generate magic link token automatically (Issue #587)
       // Token generated for all Gift Aid campaigns to enable post-donation opt-in

@@ -145,7 +145,7 @@ export function ResultScreen({
                     className="w-full max-w-md mx-auto h-16 rounded-xl font-semibold text-lg border-2 border-green-200 text-green-800 flex items-center justify-center gap-2 hover:bg-green-50 transition-colors"
                   >
                     <Home className="w-5 h-5" />
-                    Return to Campaigns
+                    Browse Campaigns
                   </button>
                 </div>
 
@@ -230,7 +230,7 @@ export function ResultScreen({
                   className="w-full max-w-md mx-auto h-16 rounded-xl font-semibold text-lg border-2 border-green-200 text-green-800 flex items-center justify-center gap-2 hover:bg-green-50 transition-colors"
                 >
                   <Home className="w-5 h-5" />
-                  Return to Campaigns
+                  Browse Campaigns
                 </button>
               </div>
 
