@@ -162,6 +162,46 @@ const sendDonationThankYouEmail = (req, res) => {
         source: donationSnap?.exists ? 'donation' : 'subscription_fallback',
       });
 
+      // Persist the email back to the donation doc and linked Gift Aid declaration
+      // so both records reflect the donor's contact details going forward.
+      if (donationSnap?.exists) {
+        const donationId = donationSnap.id;
+        const emailNormalized = email.toLowerCase();
+        const db = admin.firestore();
+
+        try {
+          const donationRef = db.collection('donations').doc(donationId);
+          await donationRef.set(
+            {
+              donorEmail: email,
+              donorEmailNormalized: emailNormalized,
+              updatedAt: admin.firestore.Timestamp.now(),
+            },
+            { merge: true },
+          );
+
+          // Also update the linked Gift Aid declaration if one exists
+          const giftAidDeclarationId = normalizeString(donationData.giftAidDeclarationId);
+          if (giftAidDeclarationId) {
+            const declarationRef = db.collection('giftAidDeclarations').doc(giftAidDeclarationId);
+            await declarationRef.set(
+              {
+                donorEmail: email,
+                donorEmailNormalized: emailNormalized,
+                updatedAt: admin.firestore.Timestamp.now(),
+              },
+              { merge: true },
+            );
+          }
+        } catch (writeError) {
+          // Non-critical — email was already sent, log and continue
+          console.warn('Failed to persist donor email after receipt send (non-critical):', {
+            donationId,
+            error: writeError.message,
+          });
+        }
+      }
+
       return res.status(200).send({
         success: true,
         message: 'Thank-you email sent.',
