@@ -50,11 +50,15 @@ const getDonationDateFromPaymentIntent = (paymentIntent, metadata) => {
 };
 
 const getTaxYear = (dateValue) => {
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return null;
+  // Handle Firestore Timestamp objects (duck-type on .toDate())
+  const resolved =
+    typeof dateValue === 'object' && typeof dateValue.toDate === 'function'
+      ? dateValue.toDate()
+      : new Date(dateValue);
+  if (Number.isNaN(resolved.getTime())) return null;
 
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth();
+  const year = resolved.getUTCFullYear();
+  const month = resolved.getUTCMonth();
   const startYear = month >= 3 ? year : year - 1;
   const endYearShort = String((startYear + 1) % 100).padStart(2, '0');
   return `${startYear}-${endYearShort}`;
