@@ -34,7 +34,7 @@ function GiftAidFormContent() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [campaignTitle, setCampaignTitle] = useState<string>('Your Donation');
 
-  // Validate token on mount
+  // Validate token on mount with caching to prevent race conditions
   useEffect(() => {
     if (!token) {
       setTokenError('No token provided');
@@ -42,9 +42,66 @@ function GiftAidFormContent() {
       return;
     }
 
-    validateToken();
+    validateTokenWithCache();
+
+    // Cleanup function to clear cache if component unmounts before completion
+    return () => {
+      // Only clear cache if we're still validating (user navigated away)
+      if (validating && token) {
+        const cacheKey = `tokenValidation_${token}`;
+        const cachedData = sessionStorage.getItem(cacheKey);
+        if (cachedData) {
+          // Don't clear cache - user might be coming back
+        }
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  const validateTokenWithCache = async () => {
+    if (!token) return;
+
+    // Check if we have cached validation data from the magic link page
+    // This prevents duplicate validation calls and race conditions
+    const cacheKey = `tokenValidation_${token}`;
+    const cachedData = sessionStorage.getItem(cacheKey);
+
+    if (cachedData) {
+      try {
+        const parsedData: TokenData = JSON.parse(cachedData);
+
+        // Verify cache is still fresh (within 5 minutes)
+        const cacheTimestamp = sessionStorage.getItem(`${cacheKey}_timestamp`);
+        const now = Date.now();
+        const fiveMinutes = 5 * 60 * 1000;
+
+        if (cacheTimestamp && now - parseInt(cacheTimestamp) < fiveMinutes) {
+          setTokenData(parsedData);
+
+          // Fetch campaign title if needed
+          if (parsedData.campaignId && !parsedData.campaignTitle) {
+            await fetchCampaignTitle(parsedData.campaignId);
+          } else if (parsedData.campaignTitle) {
+            setCampaignTitle(parsedData.campaignTitle);
+          }
+
+          setValidating(false);
+          return;
+        } else {
+          // Cache expired, clear it
+          sessionStorage.removeItem(cacheKey);
+          sessionStorage.removeItem(`${cacheKey}_timestamp`);
+        }
+      } catch (error) {
+        console.warn('Failed to parse cached token data:', error);
+        sessionStorage.removeItem(cacheKey);
+        sessionStorage.removeItem(`${cacheKey}_timestamp`);
+      }
+    }
+
+    // No valid cache, perform validation
+    await validateToken();
+  };
 
   const validateToken = async () => {
     if (!token) return;
@@ -66,6 +123,11 @@ function GiftAidFormContent() {
         setValidating(false);
         return;
       }
+
+      // Cache the validation result to prevent duplicate calls
+      const cacheKey = `tokenValidation_${token}`;
+      sessionStorage.setItem(cacheKey, JSON.stringify(data));
+      sessionStorage.setItem(`${cacheKey}_timestamp`, Date.now().toString());
 
       setTokenData(data);
 
@@ -187,6 +249,11 @@ function GiftAidFormContent() {
           transactionId: tokenData?.donationId || '',
         }),
       );
+
+      // Clear token validation cache after successful submission
+      const cacheKey = `tokenValidation_${token}`;
+      sessionStorage.removeItem(cacheKey);
+      sessionStorage.removeItem(`${cacheKey}_timestamp`);
 
       // Redirect to thank you page
       router.push('/gift-aid-thank-you');
