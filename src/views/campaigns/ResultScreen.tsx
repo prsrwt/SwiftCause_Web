@@ -143,15 +143,16 @@ export function ResultScreen({
                       </p>
                     </div>
                     <a
-                      href={`/link/${result.magicLinkToken}`}
+                      href={`/gift-aid?token=${result.magicLinkToken}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="block w-full p-4 bg-white border-2 border-blue-300 rounded-xl text-center hover:bg-blue-50 hover:border-blue-400 transition-all group"
                     >
                       <p className="text-blue-600 font-medium group-hover:text-blue-700 break-all text-sm">
-                        {window.location.origin}/link/{result.magicLinkToken.substring(0, 20)}...
+                        {window.location.origin}/gift-aid?token=
+                        {result.magicLinkToken.substring(0, 20)}...
                       </p>
-                      <p className="text-xs text-blue-500 mt-1">Click to open magic link</p>
+                      <p className="text-xs text-blue-500 mt-1">Click to open Gift Aid form</p>
                     </a>
                     <p className="text-xs text-gray-500 text-center mt-2">
                       ⏱️ Link available for 2 minutes • Expires in 30 days after first use
@@ -181,7 +182,7 @@ export function ResultScreen({
                     style={{ borderColor: `${accentColor}55`, color: accentColor }}
                   >
                     <Home className="w-5 h-5" />
-                    Return to Campaigns
+                    Browse Campaigns
                   </button>
                 </div>
 
@@ -271,7 +272,7 @@ export function ResultScreen({
                   style={{ borderColor: `${accentColor}55`, color: accentColor }}
                 >
                   <Home className="w-5 h-5" />
-                  Return to Campaigns
+                  Browse Campaigns
                 </button>
               </div>
 

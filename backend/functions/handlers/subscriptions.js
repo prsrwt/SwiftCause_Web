@@ -4,7 +4,7 @@ const cors = require('../middleware/cors');
 const { createSubscriptionDoc } = require('../entities/subscription');
 const { createDonationDoc } = require('../entities/donation');
 const DEFAULT_GIFT_AID_DECLARATION_TEXT =
-  'I confirm I have paid enough UK Income or Capital Gains Tax to cover all my Gift Aid donations in this tax year.';
+  'I want to Gift Aid my donation and any donations I make in the future or have made in the past four years to this charity. I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any difference.';
 
 const toBoolean = (value) => value === true || value === 'true' || value === '1';
 
@@ -20,10 +20,14 @@ const normalizeEmail = (value) => {
 };
 
 const getTaxYear = (dateValue) => {
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return null;
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth();
+  // Handle Firestore Timestamp objects (duck-type on .toDate())
+  const resolved =
+    typeof dateValue === 'object' && typeof dateValue.toDate === 'function'
+      ? dateValue.toDate()
+      : new Date(dateValue);
+  if (Number.isNaN(resolved.getTime())) return null;
+  const year = resolved.getUTCFullYear();
+  const month = resolved.getUTCMonth();
   const startYear = month >= 3 ? year : year - 1;
   const endYearShort = String((startYear + 1) % 100).padStart(2, '0');
   return `${startYear}-${endYearShort}`;
@@ -93,7 +97,7 @@ const createGiftAidDeclarationFromMetadata = async ({
 
   const declarationId =
     toStringOrNull(metadata.giftAidDeclarationId) || toStringOrNull(metadata.declarationId);
-  const now = new Date().toISOString();
+  const now = admin.firestore.Timestamp.now();
   const donorTitle = toStringOrNull(metadata.giftAidTitle);
 
   if (declarationId) {
@@ -156,7 +160,35 @@ const createGiftAidDeclarationFromMetadata = async ({
   const parsed = donorName.split(' ').filter(Boolean);
   const fallbackFirst = parsed[0] || 'Anonymous';
   const fallbackLast = parsed.slice(1).join(' ') || 'Donor';
-  const declarationDate = toStringOrNull(metadata.giftAidDeclarationDate) || donationDateIso;
+
+  // donationDateIso is always a valid ISO string (set from invoice.created * 1000).
+  // giftAidDeclarationDate comes from Stripe metadata and may be absent or malformed.
+  // Validate both upfront so we fail fast rather than writing a bad document.
+  const donationDateObj = new Date(donationDateIso);
+  if (isNaN(donationDateObj.getTime())) {
+    throw new Error(`[Gift Aid Recurring] Invalid donationDateIso: "${donationDateIso}"`);
+  }
+
+  // Declare donationDateTimestamp first — declarationDateTimestamp may reference it as fallback
+  const donationDateTimestamp = admin.firestore.Timestamp.fromDate(donationDateObj);
+
+  const rawDeclarationDate = toStringOrNull(metadata.giftAidDeclarationDate);
+  let declarationDateTimestamp;
+  if (rawDeclarationDate) {
+    const declarationDateObj = new Date(rawDeclarationDate);
+    if (isNaN(declarationDateObj.getTime())) {
+      // Malformed optional field — fall back to donation date, same as one-time webhook path
+      console.warn(
+        '[Gift Aid Recurring] Invalid giftAidDeclarationDate, falling back to donationDate:',
+        rawDeclarationDate,
+      );
+      declarationDateTimestamp = donationDateTimestamp;
+    } else {
+      declarationDateTimestamp = admin.firestore.Timestamp.fromDate(declarationDateObj);
+    }
+  } else {
+    declarationDateTimestamp = donationDateTimestamp;
+  }
 
   await ref.set({
     id: donationId,
@@ -175,7 +207,7 @@ const createGiftAidDeclarationFromMetadata = async ({
       toStringOrNull(metadata.giftAidDeclarationText) || DEFAULT_GIFT_AID_DECLARATION_TEXT,
     declarationTextVersion:
       toStringOrNull(metadata.giftAidDeclarationTextVersion) || 'hmrc-ch3-2026-03',
-    declarationDate,
+    declarationDate: declarationDateTimestamp,
     giftAidConsent: toBoolean(metadata.giftAidConsent),
     ukTaxpayerConfirmation: toBoolean(metadata.giftAidTaxpayer),
     dataProcessingConsent: toBoolean(metadata.giftAidDataProcessingConsent),
@@ -185,7 +217,7 @@ const createGiftAidDeclarationFromMetadata = async ({
     campaignId: campaignId || null,
     campaignTitle: campaignTitle || 'Recurring Donation',
     organizationId: organizationId || null,
-    donationDate: donationDateIso,
+    donationDate: donationDateTimestamp,
     taxYear: toStringOrNull(metadata.giftAidTaxYear) || getTaxYear(donationDateIso) || 'unknown',
     giftAidStatus: 'pending',
     hmrcClaimStatus: 'pending',
@@ -646,4 +678,6 @@ module.exports = {
   createRecurringSubscription,
   cancelRecurringSubscription,
   updateSubscriptionPaymentMethod,
+  // Test-only export — not part of the public API
+  __createRecurringGiftAidDeclaration: createGiftAidDeclarationFromMetadata,
 };
