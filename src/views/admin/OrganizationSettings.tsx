@@ -102,12 +102,27 @@ export function OrganizationSettings({
 
   const logoInputRef = useRef<HTMLInputElement | null>(null);
   const idleImageInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingOppositeSectionDraftRef = useRef<{
+    identity?: {
+      displayName: string;
+      thankYouMessage: string;
+    };
+    branding?: {
+      accentColorHex: string;
+      logoUrl: string | null;
+      idleImageUrl: string | null;
+      pendingLogo: OrganizationSettingsUploadResult | null;
+      pendingIdleImage: OrganizationSettingsUploadResult | null;
+      logoDimensions: { width: number; height: number } | null;
+    };
+  } | null>(null);
 
   useEffect(() => {
     if (!organization) {
       return;
     }
 
+    const draftToRestore = pendingOppositeSectionDraftRef.current;
     setDisplayName(organization.settings?.displayName || organization.name || '');
     setAccentColorHex(organization.settings?.accentColorHex || ACCENT_COLOR_FALLBACK);
     setThankYouMessage(organization.settings?.thankYouMessage || '');
@@ -115,6 +130,23 @@ export function OrganizationSettings({
     setIdleImageUrl(organization.settings?.idleImageUrl || null);
     setPendingLogo(null);
     setPendingIdleImage(null);
+    setLogoDimensions(null);
+
+    if (draftToRestore?.identity) {
+      setDisplayName(draftToRestore.identity.displayName);
+      setThankYouMessage(draftToRestore.identity.thankYouMessage);
+    }
+
+    if (draftToRestore?.branding) {
+      setAccentColorHex(draftToRestore.branding.accentColorHex);
+      setLogoUrl(draftToRestore.branding.logoUrl);
+      setIdleImageUrl(draftToRestore.branding.idleImageUrl);
+      setPendingLogo(draftToRestore.branding.pendingLogo);
+      setPendingIdleImage(draftToRestore.branding.pendingIdleImage);
+      setLogoDimensions(draftToRestore.branding.logoDimensions);
+    }
+
+    pendingOppositeSectionDraftRef.current = null;
   }, [organization]);
 
   useEffect(() => {
@@ -262,6 +294,12 @@ export function OrganizationSettings({
   };
 
   const handleSaveSection = async (section: 'identity' | 'branding') => {
+    const currentOrganization = organization;
+    if (!currentOrganization) {
+      showToast('Organization record is not available.', 'error');
+      return;
+    }
+
     const hasSectionPermission = section === 'identity' ? canEditIdentity : canEditBranding;
     if (!hasSectionPermission) {
       showToast(
@@ -319,21 +357,60 @@ export function OrganizationSettings({
 
     setSavingSection(section);
     try {
+      const draftToPreserve =
+        section === 'identity' && hasBrandingChanges
+          ? {
+              branding: {
+                accentColorHex,
+                logoUrl,
+                idleImageUrl,
+                pendingLogo,
+                pendingIdleImage,
+                logoDimensions,
+              },
+            }
+          : section === 'branding' && hasIdentityChanges
+            ? {
+                identity: {
+                  displayName,
+                  thankYouMessage,
+                },
+              }
+            : null;
+      pendingOppositeSectionDraftRef.current = draftToPreserve;
+
+      const persistedDisplayName = (
+        currentOrganization.settings?.displayName ||
+        currentOrganization.name ||
+        ''
+      ).trim();
+      const persistedThankYouMessage = (currentOrganization.settings?.thankYouMessage || '').trim();
+      const persistedAccentColorHex = (
+        currentOrganization.settings?.accentColorHex || ACCENT_COLOR_FALLBACK
+      ).trim();
+      const persistedLogoUrl = currentOrganization.settings?.logoUrl || null;
+      const persistedIdleImageUrl = currentOrganization.settings?.idleImageUrl || null;
+      const isIdentitySave = section === 'identity';
+
       await organizationApi.saveOrganizationSettings({
         organizationId,
         section,
-        displayName: trimmedDisplayName,
-        accentColorHex: trimmedAccentColorHex,
-        thankYouMessage: trimmedThankYouMessage || null,
-        logoUrl,
-        idleImageUrl,
-        logo: pendingLogo,
-        idleImage: pendingIdleImage,
+        displayName: isIdentitySave ? trimmedDisplayName : persistedDisplayName,
+        accentColorHex: isIdentitySave ? persistedAccentColorHex : trimmedAccentColorHex,
+        thankYouMessage: isIdentitySave
+          ? trimmedThankYouMessage || null
+          : persistedThankYouMessage || null,
+        logoUrl: isIdentitySave ? persistedLogoUrl : logoUrl,
+        idleImageUrl: isIdentitySave ? persistedIdleImageUrl : idleImageUrl,
+        logo: isIdentitySave ? null : pendingLogo,
+        idleImage: isIdentitySave ? null : pendingIdleImage,
         logoDimensions: resolvedLogoDimensions,
       });
 
-      setPendingLogo(null);
-      setPendingIdleImage(null);
+      if (section === 'branding') {
+        setPendingLogo(null);
+        setPendingIdleImage(null);
+      }
       onOrganizationSwitch?.(organizationId, trimmedDisplayName);
       showToast(
         section === 'identity'
@@ -342,6 +419,7 @@ export function OrganizationSettings({
         'success',
       );
     } catch (saveError) {
+      pendingOppositeSectionDraftRef.current = null;
       const message =
         saveError instanceof Error ? saveError.message : 'Failed to update organization settings.';
       showToast(message, 'error');

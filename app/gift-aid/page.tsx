@@ -11,6 +11,7 @@ interface TokenData {
   tokenId?: string;
   donationId?: string;
   campaignId?: string;
+  charityId?: string;
   campaignTitle?: string;
   amount?: number;
   currency?: string;
@@ -232,7 +233,9 @@ function GiftAidFormContent() {
         return;
       }
 
-      // Success - store data for thank you page
+      // Success - clear saved form data and store data for thank you page
+      sessionStorage.removeItem(`giftAidForm_${campaignTitle}_${(tokenData?.amount || 0) / 100}`);
+
       const donationAmountPounds = (tokenData?.amount || 0) / 100;
       const giftAidBonus = data.giftAidAmount / 100;
       const totalImpact = data.totalImpact / 100;
@@ -313,7 +316,7 @@ function GiftAidFormContent() {
           amount={amount}
           currency={tokenData.currency || 'GBP'}
           campaignTitle={campaignTitle}
-          organizationId={tokenData.campaignId || ''}
+          organizationId={tokenData.charityId || ''}
           collectDonorEmail={false}
           enableAutoLookup={false}
           onSubmit={handleSubmit}

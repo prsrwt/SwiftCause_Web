@@ -372,6 +372,7 @@ exports.validateMagicLinkToken = functions.https.onRequest(async (req, res) => {
           tokenId: tokenId,
           donationId: tokenData.donationId,
           campaignId: tokenData.campaignId,
+          charityId: tokenData.charityId || null,
           amount: tokenData.amount,
           currency: tokenData.currency,
           purpose: tokenData.purpose,
@@ -550,10 +551,14 @@ const PROCESSING_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 // This matches the existing implementation in webhooks.js and subscriptions.js
 // TODO: Consider implementing proper April 6 boundary check across all handlers
 const getTaxYear = (dateValue) => {
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return 'unknown';
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth();
+  // Handle Firestore Timestamp objects (duck-type on .toDate())
+  const resolved =
+    typeof dateValue === 'object' && typeof dateValue.toDate === 'function'
+      ? dateValue.toDate()
+      : new Date(dateValue);
+  if (Number.isNaN(resolved.getTime())) return 'unknown';
+  const year = resolved.getUTCFullYear();
+  const month = resolved.getUTCMonth();
   const startYear = month >= 3 ? year : year - 1;
   const endYearShort = String((startYear + 1) % 100).padStart(2, '0');
   return `${startYear}-${endYearShort}`;
@@ -835,7 +840,10 @@ exports.completeGiftAidFlow = functions.https.onRequest(async (req, res) => {
         donationAmount: tokenData.amount,
         giftAidAmount: giftAidAmount,
         campaignId: tokenData.campaignId || null,
-        campaignTitle: donationData.metadata?.campaignTitleSnapshot || 'Donation',
+        campaignTitle:
+          donationData.metadata?.campaignTitleSnapshot ||
+          donationData.campaignTitleSnapshot ||
+          'Donation',
         organizationId: tokenData.charityId || donationData.organizationId || null,
         donationDate: donationData.createdAt || timestamp,
         taxYear: getTaxYear(donationData.createdAt || timestamp),

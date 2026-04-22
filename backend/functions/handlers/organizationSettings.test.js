@@ -220,4 +220,83 @@ describe('updateOrganizationSettings', () => {
       }),
     });
   });
+
+  it('ignores branding deltas in identity section payloads', async () => {
+    await seedOrganization('org-1', {
+      settings: {
+        displayName: 'Org One',
+        logoUrl: null,
+        idleImageUrl: null,
+        accentColorHex: '#0E8F5A',
+        thankYouMessage: null,
+      },
+    });
+    await seedUser('user-1', {
+      role: 'admin',
+      permissions: ['change_org_identity'],
+    });
+
+    const req = createRequest({
+      organizationId: 'org-1',
+      section: 'identity',
+      settings: {
+        displayName: 'Org One Updated',
+        accentColorHex: '#123ABC',
+        logoUrl: null,
+        idleImageUrl: null,
+        thankYouMessage: 'Thanks!',
+      },
+    });
+    const res = await invokeHandler(req);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      success: true,
+      organizationId: 'org-1',
+      settings: expect.objectContaining({
+        displayName: 'Org One Updated',
+        accentColorHex: '#0E8F5A',
+      }),
+    });
+  });
+
+  it('ignores identity deltas in branding section payloads', async () => {
+    await seedOrganization('org-1', {
+      settings: {
+        displayName: 'Org One',
+        logoUrl: null,
+        idleImageUrl: null,
+        accentColorHex: '#0E8F5A',
+        thankYouMessage: 'Thanks',
+      },
+    });
+    await seedUser('user-1', {
+      role: 'admin',
+      permissions: ['change_org_branding'],
+    });
+
+    const req = createRequest({
+      organizationId: 'org-1',
+      section: 'branding',
+      settings: {
+        displayName: 'Unauthorized Identity Change',
+        accentColorHex: '#123ABC',
+        logoUrl: null,
+        idleImageUrl: null,
+        thankYouMessage: 'Should be ignored',
+      },
+    });
+    const res = await invokeHandler(req);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      success: true,
+      organizationId: 'org-1',
+      settings: expect.objectContaining({
+        displayName: 'Org One',
+        accentColorHex: '#123ABC',
+        thankYouMessage: 'Thanks',
+      }),
+    });
+  });
 });
