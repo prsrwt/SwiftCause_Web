@@ -171,7 +171,9 @@ function GiftAidFormContent() {
         return;
       }
 
-      // Success - store data for thank you page
+      // Success - clear saved form data and store data for thank you page
+      sessionStorage.removeItem(`giftAidForm_${campaignTitle}_${(tokenData?.amount || 0) / 100}`);
+
       const donationAmountPounds = (tokenData?.amount || 0) / 100;
       const giftAidBonus = data.giftAidAmount / 100;
       const totalImpact = data.totalImpact / 100;

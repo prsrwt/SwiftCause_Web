@@ -138,15 +138,6 @@ export const GiftAidDetailsPanel: React.FC<GiftAidDetailsPanelProps> = ({
     formStorageKey,
   ]);
 
-  // Clear saved form data on successful submission
-  const clearSavedFormData = () => {
-    try {
-      sessionStorage.removeItem(formStorageKey);
-    } catch (error) {
-      console.warn('Failed to clear saved form data:', error);
-    }
-  };
-
   const giftAidAmount = amount * 0.25;
   const totalWithGiftAid = amount + giftAidAmount;
   const declarationText = getHmrcDeclarationText(campaignTitle);
@@ -247,9 +238,8 @@ export const GiftAidDetailsPanel: React.FC<GiftAidDetailsPanelProps> = ({
       timestamp: currentDate,
       taxYear: `${currentYear}-${String(currentYear + 1).slice(-2)}`,
     };
-    // Clear saved form data on successful submission
-    clearSavedFormData();
-    // onSubmit may be async — await it so submitting state is always cleared
+    // onSubmit may be async — await it so submitting state is always cleared.
+    // Draft clearing is handled by the parent on confirmed success.
     Promise.resolve(onSubmit(giftAidDetails)).finally(() => {
       setSubmitting(false);
     });
