@@ -17,6 +17,7 @@ import { formatCurrency } from '../../shared/lib/currencyFormatter';
 import {
   syncCampaignsForKiosk,
   removeKioskFromAllCampaigns,
+  normalizeAssignments,
 } from '../../shared/lib/sync/campaignKioskSync';
 import { PaginationControls } from '../../shared/ui/PaginationControls';
 
@@ -422,8 +423,14 @@ export function KioskManagement({
 
     setIsDeletingKiosk(true);
     try {
-      const assignedCampaigns = kioskToDelete.assignedCampaigns || [];
-      await removeKioskFromAllCampaigns(kioskToDelete.id, assignedCampaigns);
+      const assignedCampaigns = normalizeAssignments(kioskToDelete.assignedCampaigns);
+      const syncResult = await removeKioskFromAllCampaigns(kioskToDelete.id, assignedCampaigns);
+      if (syncResult.failed.length > 0) {
+        showToast(
+          `Kiosk deleted, but ${syncResult.failed.length} campaign unlink operation(s) failed.`,
+          'warning',
+        );
+      }
 
       await deleteDoc(doc(db, 'kiosks', kioskToDelete.id));
       refreshKiosks();
