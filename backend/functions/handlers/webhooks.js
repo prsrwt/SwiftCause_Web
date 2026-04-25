@@ -478,6 +478,39 @@ const handlePaymentCompletedStripeWebhook = async (req, res) => {
         }
       }
 
+      // Resolve location snapshot from location_id in metadata (set by createKioskPaymentIntent).
+      // Non-blocking — a missing or deleted location does not fail the webhook.
+      const resolvedLocationId = toStringOrNull(metadata.location_id);
+      let resolvedLocationSnapshot = null;
+      if (resolvedLocationId) {
+        try {
+          const locationSnap = await admin
+            .firestore()
+            .collection('locations')
+            .doc(resolvedLocationId)
+            .get();
+          if (locationSnap.exists) {
+            const loc = locationSnap.data();
+            resolvedLocationSnapshot = {
+              name: toStringOrNull(loc.name) || '',
+              postcode: toStringOrNull(loc.postcode) || '',
+              city: toStringOrNull(loc.city) || '',
+            };
+          } else {
+            console.warn(
+              '[Webhook] Location not found for id:',
+              resolvedLocationId,
+              paymentIntent.id,
+            );
+          }
+        } catch (locationErr) {
+          console.warn(
+            '[Webhook] Failed to fetch location snapshot (non-critical):',
+            locationErr.message,
+          );
+        }
+      }
+
       // Use entity to create donation with recurring support
       await createDonationDoc({
         transactionId: paymentIntent.id,
@@ -497,6 +530,8 @@ const handlePaymentCompletedStripeWebhook = async (req, res) => {
         invoiceId: resolvedInvoiceId,
         kioskId: toStringOrNull(metadata.kioskId),
         platform: resolvedPlatform,
+        location_id: resolvedLocationId,
+        location_snapshot: resolvedLocationSnapshot,
         metadata: {
           campaignTitleSnapshot,
           source: 'stripe_webhook',
