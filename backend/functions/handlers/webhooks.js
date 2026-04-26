@@ -96,6 +96,52 @@ const withRetries = async (fn, contextLabel, maxAttempts = 3) => {
   throw new Error(`${contextLabel} exhausted retries`);
 };
 
+/**
+ * Resolve location_id and location_snapshot for a kiosk-originated donation.
+ *
+ * Rule: if kioskId is present, location_id and location_snapshot MUST be present.
+ * Throws if the location doc is missing or has incomplete required fields.
+ * Returns { location_id: null, location_snapshot: null } for non-kiosk donations.
+ *
+ * @param {string|null} locationId - location_id from Stripe metadata or kiosk doc
+ * @param {string|null} kioskId - kioskId to determine if this is a kiosk donation
+ * @param {string} context - label for error messages (e.g. payment intent id)
+ * @return {Promise<{location_id: string|null, location_snapshot: object|null}>}
+ */
+const resolveLocationForDonation = async (locationId, kioskId, context) => {
+  // Non-kiosk donation — location fields are intentionally absent
+  if (!kioskId) {
+    return { location_id: null, location_snapshot: null };
+  }
+
+  // Kiosk donation — location_id must be present
+  if (!locationId) {
+    throw new Error(
+      `[Location] Kiosk donation is missing location_id (kiosk: ${kioskId}, context: ${context})`,
+    );
+  }
+
+  const locationSnap = await admin.firestore().collection('locations').doc(locationId).get();
+  if (!locationSnap.exists) {
+    throw new Error(
+      `[Location] Location doc not found: ${locationId} (kiosk: ${kioskId}, context: ${context})`,
+    );
+  }
+
+  const loc = locationSnap.data();
+  const name = toStringOrNull(loc.name);
+  const postcode = toStringOrNull(loc.postcode);
+  const city = toStringOrNull(loc.city);
+
+  if (!name || !postcode || !city) {
+    throw new Error(
+      `[Location] Location ${locationId} missing required fields (name, postcode, city) — context: ${context}`,
+    );
+  }
+
+  return { location_id: locationId, location_snapshot: { name, postcode, city } };
+};
+
 const writeGiftAidReconciliationIssue = async ({
   paymentIntentId,
   declarationId,
@@ -478,34 +524,13 @@ const handlePaymentCompletedStripeWebhook = async (req, res) => {
         }
       }
 
-      // Resolve location snapshot from location_id in metadata (set by createKioskPaymentIntent).
-      // Only kiosk payments carry location_id. Web/recurring payments legitimately have none.
-      // If location_id is present, the snapshot must be complete — fail if the location doc
-      // is missing or has incomplete required fields (name, postcode, city).
-      const resolvedLocationId = toStringOrNull(metadata.location_id);
-      let resolvedLocationSnapshot = null;
-      if (resolvedLocationId) {
-        const locationSnap = await admin
-          .firestore()
-          .collection('locations')
-          .doc(resolvedLocationId)
-          .get();
-        if (!locationSnap.exists) {
-          throw new Error(
-            `[Webhook] Location doc not found for id: ${resolvedLocationId} (payment: ${paymentIntent.id})`,
-          );
-        }
-        const loc = locationSnap.data();
-        const locName = toStringOrNull(loc.name);
-        const locPostcode = toStringOrNull(loc.postcode);
-        const locCity = toStringOrNull(loc.city);
-        if (!locName || !locPostcode || !locCity) {
-          throw new Error(
-            `[Webhook] Location ${resolvedLocationId} is missing required fields (name, postcode, city)`,
-          );
-        }
-        resolvedLocationSnapshot = { name: locName, postcode: locPostcode, city: locCity };
-      }
+      // Resolve location — strict for kiosk donations, null for web/recurring
+      const { location_id: resolvedLocationId, location_snapshot: resolvedLocationSnapshot } =
+        await resolveLocationForDonation(
+          toStringOrNull(metadata.location_id),
+          toStringOrNull(metadata.kioskId),
+          paymentIntent.id,
+        );
 
       // Use entity to create donation with recurring support
       await createDonationDoc({
@@ -844,42 +869,21 @@ const handleInvoicePaid = async (invoice) => {
         : 'monthly';
 
   // Create donation record for this recurring payment
-  // Resolve location from the subscription's kiosk if available
-  let recurringLocationId = null;
-  let recurringLocationSnapshot = null;
+  // Resolve location — strict for kiosk recurring donations, null for web
   const recurringKioskId =
     toStringOrNull(subscriptionData.metadata?.kioskId) || toStringOrNull(subscriptionData.kioskId);
+  let recurringLocationId = null;
+  let recurringLocationSnapshot = null;
   if (recurringKioskId) {
-    try {
-      const kioskSnap = await admin.firestore().collection('kiosks').doc(recurringKioskId).get();
-      if (kioskSnap.exists) {
-        const locationId = toStringOrNull(kioskSnap.data().location_id);
-        if (locationId) {
-          const locationSnap = await admin
-            .firestore()
-            .collection('locations')
-            .doc(locationId)
-            .get();
-          if (locationSnap.exists) {
-            const loc = locationSnap.data();
-            const locName = toStringOrNull(loc.name);
-            const locPostcode = toStringOrNull(loc.postcode);
-            const locCity = toStringOrNull(loc.city);
-            if (locName && locPostcode && locCity) {
-              recurringLocationId = locationId;
-              recurringLocationSnapshot = { name: locName, postcode: locPostcode, city: locCity };
-            } else {
-              console.warn('[Webhook Recurring] Location missing required fields:', locationId);
-            }
-          }
-        }
-      }
-    } catch (locErr) {
-      console.warn(
-        '[Webhook Recurring] Failed to resolve location (non-blocking):',
-        locErr.message,
-      );
-    }
+    const kioskSnap = await admin.firestore().collection('kiosks').doc(recurringKioskId).get();
+    const kioskLocationId = kioskSnap.exists ? toStringOrNull(kioskSnap.data().location_id) : null;
+    const resolved = await resolveLocationForDonation(
+      kioskLocationId,
+      recurringKioskId,
+      invoice.id,
+    );
+    recurringLocationId = resolved.location_id;
+    recurringLocationSnapshot = resolved.location_snapshot;
   }
 
   await createDonationDoc({

@@ -19,6 +19,41 @@ const normalizeEmail = (value) => {
   return email ? email.toLowerCase() : null;
 };
 
+/**
+ * Resolve location_id and location_snapshot for a kiosk-originated donation.
+ * Throws if kioskId is present but location data is missing or incomplete.
+ * Returns null fields for non-kiosk donations.
+ */
+const resolveLocationForDonation = async (locationId, kioskId, context) => {
+  if (!kioskId) return { location_id: null, location_snapshot: null };
+
+  if (!locationId) {
+    throw new Error(
+      `[Location] Kiosk donation missing location_id (kiosk: ${kioskId}, context: ${context})`,
+    );
+  }
+
+  const locationSnap = await admin.firestore().collection('locations').doc(locationId).get();
+  if (!locationSnap.exists) {
+    throw new Error(
+      `[Location] Location doc not found: ${locationId} (kiosk: ${kioskId}, context: ${context})`,
+    );
+  }
+
+  const loc = locationSnap.data();
+  const name = toStringOrNull(loc.name);
+  const postcode = toStringOrNull(loc.postcode);
+  const city = toStringOrNull(loc.city);
+
+  if (!name || !postcode || !city) {
+    throw new Error(
+      `[Location] Location ${locationId} missing required fields (name, postcode, city) — context: ${context}`,
+    );
+  }
+
+  return { location_id: locationId, location_snapshot: { name, postcode, city } };
+};
+
 const getTaxYear = (dateValue) => {
   // Handle Firestore Timestamp objects (duck-type on .toDate())
   const resolved =
@@ -307,52 +342,26 @@ const createRecurringSubscription = (req, res) => {
       const campaignData = campaignSnap.data();
       const orgId = campaignData.organizationId;
 
-      // Resolve location from kiosk if this is a kiosk-originated subscription.
-      // Non-blocking for recurring — kiosk subscriptions are less common and
-      // location_id may not always be present in the request metadata.
+      // Resolve location — strict for kiosk subscriptions, null for web
+      const subscriptionKioskId = toStringOrNull(metadata.kioskId);
       let subscriptionLocationId = null;
       let subscriptionLocationSnapshot = null;
-      const subscriptionKioskId =
-        typeof metadata.kioskId === 'string' ? metadata.kioskId.trim() : null;
       if (subscriptionKioskId) {
-        try {
-          const kioskSnap = await admin
-            .firestore()
-            .collection('kiosks')
-            .doc(subscriptionKioskId)
-            .get();
-          if (kioskSnap.exists) {
-            const locationId =
-              typeof kioskSnap.data().location_id === 'string'
-                ? kioskSnap.data().location_id.trim()
-                : null;
-            if (locationId) {
-              const locationSnap = await admin
-                .firestore()
-                .collection('locations')
-                .doc(locationId)
-                .get();
-              if (locationSnap.exists) {
-                const loc = locationSnap.data();
-                const locName = typeof loc.name === 'string' ? loc.name.trim() : null;
-                const locPostcode = typeof loc.postcode === 'string' ? loc.postcode.trim() : null;
-                const locCity = typeof loc.city === 'string' ? loc.city.trim() : null;
-                if (locName && locPostcode && locCity) {
-                  subscriptionLocationId = locationId;
-                  subscriptionLocationSnapshot = {
-                    name: locName,
-                    postcode: locPostcode,
-                    city: locCity,
-                  };
-                } else {
-                  console.warn('[Subscription] Location missing required fields:', locationId);
-                }
-              }
-            }
-          }
-        } catch (locErr) {
-          console.warn('[Subscription] Failed to resolve location (non-blocking):', locErr.message);
-        }
+        const kioskSnap = await admin
+          .firestore()
+          .collection('kiosks')
+          .doc(subscriptionKioskId)
+          .get();
+        const kioskLocationId = kioskSnap.exists
+          ? toStringOrNull(kioskSnap.data().location_id)
+          : null;
+        const resolved = await resolveLocationForDonation(
+          kioskLocationId,
+          subscriptionKioskId,
+          `subscription:${campaignId}`,
+        );
+        subscriptionLocationId = resolved.location_id;
+        subscriptionLocationSnapshot = resolved.location_snapshot;
       }
 
       const orgSnap = await admin.firestore().collection('organizations').doc(orgId).get();
